@@ -21,9 +21,11 @@ object Reducer {
         fun nextId(prefix: String): String { counter++; return prefix + "_" + counter.toString().padStart(3, '0') }
 
         // 1. Transcript
-        val transcript = state.transcript + d.transcript
+        // Kept in time order, so a segment that is retried later still lands in the right place.
+        val transcript = (state.transcript + d.transcript
             .filter { it.text.isNotBlank() }
-            .map { it.copy(offsetMs = segmentStartMs + it.offsetMs) }
+            .map { it.copy(offsetMs = segmentStartMs + it.offsetMs) })
+            .sortedBy { it.offsetMs }
 
         // 2. Demographics: first heard value sticks; later disagreements become conflicts for the doctor
         var demo = state.demographics
@@ -226,6 +228,8 @@ object Reducer {
             dictated = dictated,
             transcript = transcript,
             examFindings = exam,
+            aiNextQuestions = d.nextQuestions.filter { it.en.isNotBlank() || it.ne.isNotBlank() }.take(3)
+                .ifEmpty { state.aiNextQuestions },
             counter = counter,
             audit = audit
         )
@@ -444,22 +448,36 @@ object Reducer {
 
         var suggested: String? = null
         var findings: List<SafetyFinding> = emptyList()
-        val skips = mutableListOf<String>()
+        var skips: List<String> = emptyList()
         var noSafe = false
-        if (phase == Phase.PLAN && def != null && def.linkedRegimens.isNotEmpty()) {
-            for (rid in def.linkedRegimens) {
-                val r = c.regimens[rid] ?: continue
-                if (rid in s.dismissed) { skips += "${r.label}: dismissed by doctor"; continue }
-                val inelig = eligibilityProblem(r, s, c)
-                if (inelig != null) { skips += "${r.label}: $inelig"; continue }
-                val f = Safety.evaluateRegimen(r, s, c)
-                val blocked = f.filter { it.severity == Severity.BLOCKED }
-                if (blocked.isNotEmpty()) { skips += "${r.label}: " + blocked.joinToString("; ") { it.message }; continue }
-                suggested = rid
-                findings = f
-                break
+        var provisional: String? = null
+        var provisionalFindings: List<SafetyFinding> = emptyList()
+        val blockers = mutableListOf<String>()
+        if (def != null && def.linkedRegimens.isNotEmpty() && (phase == Phase.PLAN || phase == Phase.HISTORY)) {
+            val sel = selectRegimen(def, s, c)
+            if (phase == Phase.PLAN) {
+                suggested = sel.regimenId
+                findings = sel.findings
+                skips = sel.skips
+                noSafe = sel.regimenId == null
+            } else {
+                // Preview only: shown greyed with what is still missing before it can be suggested.
+                provisional = sel.regimenId
+                provisionalFindings = sel.findings
+                if (checklist != null) {
+                    val needed = (checklist.minQuestions - covered).coerceAtLeast(0)
+                    if (needed > 0) blockers += checklist.questions.filter { it.id in pending }.take(needed).map { "Ask: ${it.promptEn}" }
+                }
+                mandatory.forEach { id ->
+                    val st = s.flags[id]?.status
+                    val label = c.redFlags[id]?.label ?: id
+                    when (st) {
+                        null, FlagStatus.UNASSESSED -> blockers += "Rule out: $label"
+                        FlagStatus.SUSPECTED -> blockers += "Clarify: $label"
+                        else -> Unit
+                    }
+                }
             }
-            if (suggested == null) noSafe = true
         }
 
         return p.copy(
@@ -472,8 +490,29 @@ object Reducer {
             suggestedRegimenId = suggested,
             suggestionFindings = findings,
             skipReasons = skips,
-            noSafeRegimen = noSafe
+            noSafeRegimen = noSafe,
+            provisionalRegimenId = provisional,
+            provisionalFindings = provisionalFindings,
+            provisionalBlockers = blockers
         )
+    }
+
+    private class Selection(val regimenId: String?, val findings: List<SafetyFinding>, val skips: List<String>)
+
+    /** Tries the condition's regimens in catalogue order; the first eligible, not dismissed, not BLOCKED one wins. */
+    private fun selectRegimen(def: ConditionDef, s: CaseState, c: Catalogues): Selection {
+        val skips = mutableListOf<String>()
+        for (rid in def.linkedRegimens) {
+            val r = c.regimens[rid] ?: continue
+            if (rid in s.dismissed) { skips += "${r.label}: dismissed by doctor"; continue }
+            val inelig = eligibilityProblem(r, s, c)
+            if (inelig != null) { skips += "${r.label}: $inelig"; continue }
+            val f = Safety.evaluateRegimen(r, s, c)
+            val blocked = f.filter { it.severity == Severity.BLOCKED }
+            if (blocked.isNotEmpty()) { skips += "${r.label}: " + blocked.joinToString("; ") { it.message }; continue }
+            return Selection(rid, f, skips)
+        }
+        return Selection(null, emptyList(), skips)
     }
 
     /* ============================ Helpers ============================ */

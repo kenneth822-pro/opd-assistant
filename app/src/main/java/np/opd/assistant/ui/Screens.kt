@@ -1,14 +1,6 @@
 package np.opd.assistant.ui
 
 import android.Manifest
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.window.Dialog
-import np.opd.assistant.ai.ModelInfo
-import np.opd.assistant.ai.Provider
 import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
@@ -21,11 +13,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
@@ -37,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,12 +37,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -62,14 +50,18 @@ import np.opd.assistant.Screen
 import np.opd.assistant.SessionViewModel
 import np.opd.assistant.UiState
 import np.opd.engine.Catalogues
+import np.opd.engine.Demographics
 import np.opd.engine.DoctorAction
+import np.opd.engine.FlagRecord
 import np.opd.engine.FlagStatus
 import np.opd.engine.Gender
 import np.opd.engine.Phase
 import np.opd.engine.Pregnancy
 import np.opd.engine.Problem
+import np.opd.engine.RegimenDef
 import np.opd.engine.Severity
 import np.opd.engine.Sig
+import np.opd.engine.TranscriptLine
 import np.opd.engine.Vitals
 
 private val AppColors = lightColorScheme(
@@ -105,7 +97,7 @@ private fun DisclaimerScreen(vm: SessionViewModel) {
         SectionCard("Prototype for internal testing", container = Palette.urgentBg) {
             Text("This app is an early prototype. Use it ONLY with role-played or simulated consultations.")
             Text("• Medicine suggestions, doses and safety rules are UNVERIFIED and may be wrong.")
-            Text("• Audio is sent to Google's Gemini API using your own API key.")
+            Text("• Audio and transcripts are sent to the AI provider you choose (Google Gemini, OpenRouter, OpenCode, Groq or your own server) using your own API key.")
             Text("• Do not record real patients until a clinician has verified the content and the required consent, privacy and ethics steps are in place.")
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -123,16 +115,17 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
     val ready = st.speechModel != null && vm.catalogues != null
     Page("OPD Assistant") {
         Text("Ambient clinical assistant — prototype", style = MaterialTheme.typography.titleMedium)
-        Muted("Listens to a consultation, writes the note, and suggests protocol medicines only after safety checks.")
+        Muted("Listens to a consultation, shows what to ask next and what to rule out, suggests protocol medicines after safety checks, and writes the note.")
         if (st.speechModel == null) {
             SectionCard("Step 1: add a key and choose a model", container = Palette.urgentBg) {
-                Text("Open Settings, paste a Gemini key (free from aistudio.google.com/apikey) and the app will load the current models.")
+                Text("Open Settings, paste a Gemini key (free from aistudio.google.com/apikey) and the app will load the current models and pick sensible defaults.")
                 Button(onClick = { vm.go(Screen.SETTINGS) }) { Text("Open Settings") }
             }
         } else {
             SectionCard("AI models") {
                 Text("Speech: ${st.speechModel.provider.label} · ${st.speechModel.id}", fontSize = 13.sp)
-                Text("Notes: " + (st.analysisModel?.let { "${it.provider.label} · ${it.id}" } ?: "same model (one step)"), fontSize = 13.sp)
+                Text("Notes: " + (st.analysisModel?.let { "${it.provider.label} · ${it.id}" } ?: "same as speech"), fontSize = 13.sp)
+                Text("Backup: " + (st.backupModel?.let { "${it.provider.label} · ${it.id}" } ?: "none (recommended: add one)"), fontSize = 13.sp)
             }
         }
         if (vm.catalogueProblems.isNotEmpty()) {
@@ -152,222 +145,7 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
         st.message?.let { Text(it, color = Palette.emergencyFg) }
         HorizontalDivider()
         vm.catalogues?.let { c ->
-            Muted("Clinical catalogue v${c.version}: ${c.conditions.size} conditions, ${c.regimens.size} regimens, ${c.drugs.size} drugs, ${c.redFlags.size} red flags. All content is UNVERIFIED prototype data.")
-        }
-    }
-}
-
-/* ============================== Settings ============================== */
-
-private enum class PickerTarget { SPEECH, ANALYSIS }
-
-@Composable
-private fun SettingsScreen(st: UiState, vm: SessionViewModel) {
-    var geminiKey by remember { mutableStateOf("") }
-    var orKey by remember { mutableStateOf("") }
-    var seconds by remember { mutableStateOf(vm.settings.segmentSeconds.toString()) }
-    var picker by remember { mutableStateOf<PickerTarget?>(null) }
-    BackHandler { vm.go(Screen.HOME) }
-
-    picker?.let { target ->
-        ModelPickerDialog(
-            title = if (target == PickerTarget.SPEECH) "Speech model (must hear audio)" else "Notes model (reads the transcript)",
-            gemini = st.geminiModels,
-            openRouter = st.openRouterModels,
-            requireAudio = target == PickerTarget.SPEECH,
-            onLoad = { vm.loadModels(it) },
-            loading = st.modelsBusy,
-            onPick = { m ->
-                if (target == PickerTarget.SPEECH) vm.chooseSpeechModel(m) else vm.chooseAnalysisModel(m)
-                picker = null
-            },
-            onDismiss = { picker = null }
-        )
-    }
-
-    Page("Settings", onBack = { vm.go(Screen.HOME) }) {
-        st.modelsBusy?.let { Text(it); LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
-        st.message?.let { Text(it, color = Palette.infoFg, fontWeight = FontWeight.SemiBold) }
-
-        // ---- Keys ----
-        KeyCard(
-            title = "Google Gemini key",
-            saved = st.hasGeminiKey,
-            help = "Free key: aistudio.google.com/apikey (Google account). The free tier is fine for role-play tests; it has rate limits and Google may use free-tier data to improve its products.",
-            value = geminiKey,
-            onChange = { geminiKey = it },
-            onSave = { vm.saveKey(Provider.GEMINI, geminiKey); geminiKey = "" },
-            onLoad = { vm.loadModels(Provider.GEMINI) },
-            loaded = st.geminiModels.size
-        )
-        KeyCard(
-            title = "OpenRouter key (optional)",
-            saved = st.hasOpenRouterKey,
-            help = "openrouter.ai/keys. Gives access to many models, including free ones (e.g. DeepSeek) for the notes step. Free models: about 20 requests/minute and 50/day (1,000/day after a \$10 credit top-up). Live mode uses ~3-6 requests per minute.",
-            value = orKey,
-            onChange = { orKey = it },
-            onSave = { vm.saveKey(Provider.OPENROUTER, orKey); orKey = "" },
-            onLoad = { vm.loadModels(Provider.OPENROUTER) },
-            loaded = st.openRouterModels.size
-        )
-
-        // ---- Models ----
-        SectionCard("1. Speech model — listens to the audio") {
-            ModelSummary(st.speechModel, "Not chosen yet")
-            Muted("Needs a model that accepts audio input (tag AUDIO). Gemini Flash models work well for Nepali.")
-            Button(onClick = { picker = PickerTarget.SPEECH }) { Text("Choose speech model") }
-        }
-        SectionCard("2. Notes model — turns speech into structured notes") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = st.oneStep, onCheckedChange = { checked ->
-                    if (!checked) picker = PickerTarget.ANALYSIS
-                    if (checked) vm.chooseAnalysisModel(null)
-                })
-                Text("Use the speech model for this too (one step, fastest)")
-            }
-            if (!st.oneStep) {
-                ModelSummary(st.analysisModel, "")
-                Muted("Two steps: the speech model writes a transcript, then this model reads it. Any text model works, including free OpenRouter models.")
-                OutlinedButton(onClick = { picker = PickerTarget.ANALYSIS }) { Text("Change notes model") }
-            }
-        }
-        OutlinedButton(onClick = { vm.testModels() }, modifier = Modifier.fillMaxWidth()) { Text("Test selected models") }
-        st.testResult?.let { Text(it) }
-
-        SectionCard("Recording") {
-            OutlinedTextField(
-                value = seconds,
-                onValueChange = {
-                    seconds = it.filter { ch -> ch.isDigit() }.take(2)
-                    seconds.toIntOrNull()?.let { s -> if (s in 10..60) vm.setSegmentSeconds(s) }
-                },
-                label = { Text("Segment length in seconds (10-60)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Muted("Audio is cut at the first pause after this many seconds. Shorter = faster suggestions, more requests.")
-        }
-        OutlinedButton(onClick = { vm.deleteAllAudio() }, modifier = Modifier.fillMaxWidth()) { Text("Delete all recorded audio on this phone") }
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun KeyCard(
-    title: String,
-    saved: Boolean,
-    help: String,
-    value: String,
-    onChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onLoad: () -> Unit,
-    loaded: Int
-) {
-    var show by remember { mutableStateOf(false) }
-    SectionCard(title) {
-        Text(if (saved) "✓ Key saved (encrypted on this phone)" else "No key saved", color = if (saved) Palette.okFg else Palette.greyFg, fontSize = 13.sp)
-        OutlinedTextField(
-            value = value,
-            onValueChange = onChange,
-            label = { Text(if (saved) "Paste a new key to replace" else "Paste key") },
-            singleLine = true,
-            visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = onSave, enabled = value.isNotBlank()) { Text("Save key") }
-            OutlinedButton(onClick = onLoad) { Text("Load models") }
-            TextButton(onClick = { show = !show }) { Text(if (show) "Hide" else "Show") }
-        }
-        if (loaded > 0) Muted("$loaded models loaded")
-        Muted(help)
-    }
-}
-
-@Composable
-private fun ModelSummary(m: ModelInfo?, empty: String) {
-    if (m == null) {
-        if (empty.isNotBlank()) Text(empty, color = Palette.urgentFg)
-        return
-    }
-    Text(m.name, fontWeight = FontWeight.SemiBold)
-    Text("${m.provider.label} · ${m.id}", fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { m.tags().forEach { TagPill(it) } }
-}
-
-@Composable
-private fun TagPill(tag: String) = when (tag) {
-    "FREE" -> Pill("FREE", Palette.okBg, Palette.okFg)
-    "PAID" -> Pill("PAID", Palette.greyBg, Palette.greyFg)
-    "AUDIO" -> Pill("AUDIO", Palette.infoBg, Palette.infoFg)
-    else -> Pill(tag, Palette.greyBg, Palette.greyFg)
-}
-
-@Composable
-private fun ModelPickerDialog(
-    title: String,
-    gemini: List<ModelInfo>,
-    openRouter: List<ModelInfo>,
-    requireAudio: Boolean,
-    onLoad: (Provider) -> Unit,
-    loading: String?,
-    onPick: (ModelInfo) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var provider by remember { mutableStateOf(if (gemini.isNotEmpty() || openRouter.isEmpty()) Provider.GEMINI else Provider.OPENROUTER) }
-    var query by remember { mutableStateOf("") }
-    var freeOnly by remember { mutableStateOf(false) }
-    val source = if (provider == Provider.GEMINI) gemini else openRouter
-    val q = query.trim().lowercase()
-    val list = source.filter { m ->
-        (!requireAudio || m.audioInput) &&
-            (!freeOnly || m.free == true) &&
-            (q.isEmpty() || m.id.lowercase().contains(q) || m.name.lowercase().contains(q))
-    }
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Provider.values().forEach { p ->
-                        if (p == provider) Button(onClick = { provider = p }) { Text(p.label, fontSize = 12.sp) }
-                        else OutlinedButton(onClick = { provider = p }) { Text(p.label, fontSize = 12.sp) }
-                    }
-                }
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search (e.g. flash, deepseek)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                if (provider == Provider.OPENROUTER) Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = freeOnly, onCheckedChange = { freeOnly = it })
-                    Text("Free models only")
-                }
-                if (requireAudio) Muted("Showing only models that accept audio.")
-                if (provider == Provider.GEMINI) Muted("Gemini cost depends on your key: free tier (rate-limited) or paid.")
-                loading?.let { Text(it, fontSize = 12.sp) }
-                if (source.isEmpty()) {
-                    Muted("No ${provider.label} models loaded yet.")
-                    OutlinedButton(onClick = { onLoad(provider) }) { Text("Load ${provider.label} models") }
-                } else if (list.isEmpty()) {
-                    Muted("No models match." + if (requireAudio && provider == Provider.OPENROUTER) " Few OpenRouter models accept audio; free ones rarely do." else "")
-                }
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
-                    items(list, key = { it.key }) { m ->
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onPick(m) }
-                                .padding(vertical = 8.dp)
-                        ) {
-                            Text(m.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            Text(m.id, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = Palette.greyFg)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { m.tags().forEach { TagPill(it) } }
-                        }
-                        HorizontalDivider()
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Close") }
-                }
-            }
+            Muted("Built-in clinical catalogue v${c.version}: ${c.conditions.size} common conditions with question checklists, red flags and keywords, ${c.regimens.size} regimens, ${c.drugs.size} drugs, ${c.redFlags.size} red flags. Works on the phone without the AI. All content is UNVERIFIED prototype data.")
         }
     }
 }
@@ -387,10 +165,10 @@ private fun SetupScreen(st: UiState, vm: SessionViewModel) {
     BackHandler { vm.go(Screen.HOME) }
     Page("New consultation", onBack = { vm.go(Screen.HOME) }) {
         SectionCard("Mode") {
-            ModeOption("Live assist", "Suggestions appear while you talk (questions to ask, red flags, protocol medicines).", mode == Mode.LIVE) { mode = Mode.LIVE }
-            ModeOption("Scribe only", "Silent. The note and suggestions are produced when you end the consultation.", mode == Mode.SCRIBE) { mode = Mode.SCRIBE }
+            ModeOption("Live assist", "Live transcript, what to ask next, red flags to rule out and the likely prescription while you talk.", mode == Mode.LIVE) { mode = Mode.LIVE }
+            ModeOption("Scribe only", "Live transcript only. The note and suggestions are produced when you end the consultation (fewer requests).", mode == Mode.SCRIBE) { mode = Mode.SCRIBE }
         }
-        SectionCard("Patient (optional, entered by you)") {
+        SectionCard("Patient (optional)") {
             OutlinedTextField(
                 value = age,
                 onValueChange = { age = it.filter { ch -> ch.isDigit() }.take(3) },
@@ -404,7 +182,7 @@ private fun SetupScreen(st: UiState, vm: SessionViewModel) {
                 Choice("Male", gender == Gender.MALE) { gender = Gender.MALE }
                 Choice("Not set", gender == null) { gender = null }
             }
-            Muted("Age and sex let the safety engine check pregnancy and age rules from the start.")
+            Muted("If you leave these blank, the app fills them from the conversation (e.g. \"४५ वर्ष\", \"दिदी\", \"बुबा\") and marks them as heard so you can check them.")
         }
         Button(
             onClick = {
@@ -432,118 +210,8 @@ private fun ModeOption(title: String, desc: String, selected: Boolean, onClick: 
 }
 
 @Composable
-private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
     if (selected) Button(onClick = onClick) { Text(label) } else OutlinedButton(onClick = onClick) { Text(label) }
-}
-
-/* ============================== Recording ============================== */
-
-@Composable
-private fun RecordingScreen(st: UiState, vm: SessionViewModel) {
-    val view = LocalView.current
-    DisposableEffect(Unit) {
-        view.keepScreenOn = true
-        onDispose { view.keepScreenOn = false }
-    }
-    BackHandler { vm.showMessage("Use 'End consultation' to stop recording.") }
-    val cat = vm.catalogues ?: return
-    val mins = st.elapsedSec / 60
-    val secs = st.elapsedSec % 60
-    val clock = mins.toString().padStart(2, '0') + ":" + secs.toString().padStart(2, '0')
-
-    Page(
-        title = if (st.mode == Mode.LIVE) "Live assist" else "Scribe",
-        bottomBar = {
-            if (st.busy == null) {
-                Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (st.paused) OutlinedButton(onClick = { vm.resume() }, modifier = Modifier.weight(1f)) { Text("Resume") }
-                    else OutlinedButton(onClick = { vm.pause() }, modifier = Modifier.weight(1f)) { Text("Pause") }
-                    Button(
-                        onClick = { vm.endConsult() },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Palette.emergencyFg)
-                    ) { Text("End consultation") }
-                }
-            }
-        }
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(clock, fontSize = 40.sp, fontFamily = FontFamily.Monospace)
-            Column {
-                Text(if (st.paused) "⏸ Paused" else if (st.recording) "● Recording" else "Stopped", color = if (st.paused) Palette.urgentFg else Palette.emergencyFg, fontWeight = FontWeight.Bold)
-                Muted("Segments processed: ${st.segmentsProcessed}/${st.segmentsRecorded}")
-            }
-        }
-        if (st.recording && !st.paused) {
-            LinearProgressIndicator(progress = { st.level }, modifier = Modifier.fillMaxWidth())
-            Muted("Microphone level")
-        }
-        Muted(
-            if (st.oneStep) "Pipeline: ${st.speechModel?.id ?: "?"} hears the audio and writes notes (one step)."
-            else "Pipeline: ${st.speechModel?.id ?: "?"} transcribes → ${st.analysisModel?.id} writes notes."
-        )
-        st.busy?.let {
-            SectionCard("Please wait") {
-                Text(it)
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-        }
-        Banner(st.case.sessionAlerts, st.case.sessionLevel)
-        st.message?.let { Text(it, color = Palette.urgentFg) }
-
-        if (st.mode == Mode.SCRIBE) {
-            Muted("Scribe mode: audio is transcribed in the background; the note and suggestions are produced when you end the consultation.")
-        } else {
-            if (st.case.problems.isEmpty()) Muted("Listening… suggestions appear after each ${vm.settings.segmentSeconds}-second segment is analysed.")
-            st.case.problems.forEach { p -> LiveProblemCard(p, cat, vm) }
-            st.case.dictated.forEach { item ->
-                SectionCard("Dictated: ${item.stated}", container = Palette.infoBg) {
-                    if (item.findings.isEmpty()) Muted("No safety issues found.")
-                    item.findings.forEach { FindingLine(it) }
-                }
-            }
-        }
-        if (st.errors.isNotEmpty()) {
-            SectionCard("Problems", container = Palette.greyBg) { st.errors.takeLast(3).forEach { Muted(it) } }
-        }
-        Spacer(Modifier.height(80.dp))
-    }
-}
-
-@Composable
-private fun LiveProblemCard(p: Problem, cat: Catalogues, vm: SessionViewModel) {
-    val def = cat.conditions[p.conditionCode]
-    SectionCard(p.label) {
-        PhasePill(p.phase)
-        p.escalationReasons.forEach { Text("⚠ $it", color = Palette.emergencyFg, fontWeight = FontWeight.SemiBold) }
-        p.scoreText?.let { Muted(it) }
-        if (p.phase == Phase.HISTORY) {
-            val questions = def?.checklist(p.visitType)?.questions?.filter { it.id in p.pendingQuestionIds }?.take(2) ?: emptyList()
-            questions.forEach { q ->
-                Text("Ask: ${q.promptNe}", fontWeight = FontWeight.SemiBold)
-                Muted(q.promptEn)
-            }
-            val flags = p.unassessedFlagIds.take(2).mapNotNull { cat.redFlags[it] }
-            if (flags.isNotEmpty()) Muted("Rule out: " + flags.joinToString("; ") { it.label })
-        }
-        if (p.phase == Phase.PLAN) {
-            val rid = p.suggestedRegimenId
-            val reg = rid?.let { cat.regimens[it] }
-            if (reg != null) {
-                val accepted = rid in vm.ui.value.case.accepted
-                Text((if (accepted) "✓ " else "Suggest: ") + reg.label, color = Palette.okFg, fontWeight = FontWeight.SemiBold)
-                p.suggestionFindings.filter { it.severity != Severity.CAUTION }.forEach { FindingLine(it) }
-                if (!accepted) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { vm.act(DoctorAction.AcceptRegimen(rid)) }) { Text("Accept") }
-                    OutlinedButton(onClick = { vm.act(DoctorAction.DismissRegimen(rid)) }) { Text("Dismiss") }
-                }
-            } else if (p.noSafeRegimen) {
-                Text("No protocol medicine passed the safety checks — doctor's decision.", color = Palette.urgentFg)
-            } else if (def == null || def.linkedRegimens.isEmpty()) {
-                Muted("No protocol medicines for this problem.")
-            }
-        }
-    }
 }
 
 /* ============================== Review ============================== */
@@ -555,6 +223,7 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
     val context = LocalContext.current
     var reasonFor by remember { mutableStateOf<Pair<String, (String) -> Unit>?>(null) }
     var showVitals by remember { mutableStateOf(false) }
+    var showDemo by remember { mutableStateOf(false) }
     var showTranscript by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
     BackHandler { vm.go(Screen.HOME) }
@@ -563,6 +232,7 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
         ReasonDialog(title, "Reason (kept in the audit log)", onConfirm = { action(it); reasonFor = null }, onDismiss = { reasonFor = null })
     }
     if (showVitals) VitalsDialog(s.vitals, onSave = { vm.act(DoctorAction.SetVitals(it)); showVitals = false }, onDismiss = { showVitals = false })
+    if (showDemo) DemographicsDialog(s.demographics, onSave = { a, g -> vm.act(DoctorAction.SetDemographics(a, g)); showDemo = false }, onDismiss = { showDemo = false })
 
     Page("Review", onBack = { vm.go(Screen.HOME) }) {
         st.busy?.let {
@@ -570,16 +240,34 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
         }
         Banner(s.sessionAlerts, s.sessionLevel)
         if (st.finalFailed) {
-            SectionCard("The final note could not be written", container = Palette.urgentBg) {
+            SectionCard("The AI note could not be written", container = Palette.urgentBg) {
                 st.errors.takeLast(2).forEach { Muted(it) }
-                Button(onClick = { vm.retryFinal() }, enabled = st.busy == null) { Text("Try again") }
+                Muted("A note built on the phone from what was captured is shown below instead.")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { vm.retryFinal() }, enabled = st.busy == null) { Text("Try AI note again") }
+                }
+            }
+        }
+        if (st.failedSegments > 0 || st.silentSegments > 0) {
+            SectionCard("Audio not transcribed", container = Palette.greyBg) {
+                if (st.failedSegments > 0) {
+                    Text("${st.failedSegments} part(s) failed.")
+                    st.segments.filter { it.state == np.opd.assistant.SegState.FAILED }.takeLast(2).forEach { Muted("Part ${it.number}: ${it.error?.take(160)}") }
+                    OutlinedButton(onClick = { vm.retryFailed() }, enabled = st.busy == null) { Text("Retry them and rewrite the note") }
+                }
+                if (st.silentSegments > 0) {
+                    Muted("${st.silentSegments} quiet part(s) were skipped.")
+                    TextButton(onClick = { vm.retryFailed(includeSilent = true) }, enabled = st.busy == null) { Text("Transcribe quiet parts and rewrite") }
+                }
             }
         }
 
         // ---------- Patient ----------
         SectionCard("Patient") {
             val d = s.demographics
-            Text("Age: ${d.age ?: "not recorded"}   Sex: ${d.gender.name.lowercase()}   Pregnancy: ${d.pregnancy.name.lowercase().replace('_', ' ')}")
+            val heardNote = if (st.heard.isNotEmpty()) "  (${st.heard.joinToString(" & ")} heard in the conversation — check)" else ""
+            Text("Age: ${d.age ?: "not recorded"}   Sex: ${d.gender.name.lowercase()}   Pregnancy: ${d.pregnancy.name.lowercase().replace('_', ' ')}$heardNote")
+            TextButton(onClick = { showDemo = true }) { Text("Edit age / sex") }
             s.conflicts.forEach { cf ->
                 Text("Heard a different ${cf.field}: ${cf.proposed} (kept ${cf.existing})", color = Palette.urgentFg)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -594,10 +282,6 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
                     OutlinedButton(onClick = { vm.act(DoctorAction.ConfirmPregnancy(Pregnancy.PREGNANT)) }) { Text("Pregnant") }
                 }
             }
-            if (d.gender == Gender.UNKNOWN) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { vm.act(DoctorAction.SetDemographics(null, Gender.FEMALE)) }) { Text("Set female") }
-                OutlinedButton(onClick = { vm.act(DoctorAction.SetDemographics(null, Gender.MALE)) }) { Text("Set male") }
-            }
             Text("Vitals: " + s.vitals.summary().ifBlank { "none spoken" })
             TextButton(onClick = { showVitals = true }) { Text("Enter / edit vitals") }
             val allergyText = s.allergies.map { cat.allergies[it]?.label ?: it } + s.allergyNotes
@@ -608,7 +292,21 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
         }
 
         // ---------- Problems ----------
-        if (s.problems.isEmpty()) Muted("No problems were identified.")
+        if (s.problems.isEmpty()) {
+            Muted("No problems were identified.")
+            val possible = st.hints.conditions.filter { cat.conditions[it.code] != null }.take(3)
+            if (possible.isNotEmpty()) SectionCard("Possible from keywords") {
+                possible.forEach { h ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(cat.conditions[h.code]?.displayName ?: h.code, fontWeight = FontWeight.SemiBold)
+                            Muted("heard: " + h.matched.take(3).joinToString(", "))
+                        }
+                        SmallAction("Add") { vm.act(DoctorAction.AddProblem(h.code)) }
+                    }
+                }
+            }
+        }
         s.problems.forEach { p ->
             ReviewProblemCard(p, s.accepted, s.flags, cat, vm, askReason = { title, action -> reasonFor = title to action })
         }
@@ -627,12 +325,15 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
 
         // ---------- Note ----------
         st.soap?.let { n ->
-            SectionCard("Note (AI draft — check it)") {
+            SectionCard(
+                if (n.localDraft) "Note (built on the phone — AI note unavailable)" else "Note (AI draft — check it)",
+                container = if (n.localDraft) Palette.greyBg else Color.Unspecified
+            ) {
                 LabelValue("Chief complaint", n.chiefComplaint)
                 LabelValue("History", n.history)
                 LabelValue("Examination", n.examSpoken)
                 LabelValue("Assessment", n.assessment)
-                if (n.planSpoken.isNotBlank()) LabelValue("Plan (as spoken)", n.planSpoken)
+                if (n.planSpoken.isNotBlank()) LabelValue(if (n.localDraft) "Plan" else "Plan (as spoken)", n.planSpoken)
                 if (n.adviceSpoken.isNotBlank()) LabelValue("Advice (as spoken)", n.adviceSpoken)
                 if (n.followUp.isNotBlank()) LabelValue("Follow-up", n.followUp)
             }
@@ -653,14 +354,17 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
 
         // ---------- Technical ----------
         TextButton(onClick = { showTranscript = !showTranscript }) { Text(if (showTranscript) "Hide transcript" else "Show transcript (${s.transcript.size} lines)") }
-        if (showTranscript) SectionCard("Transcript") {
-            s.transcript.forEach { Text("${it.speaker}: ${it.text}", fontSize = 13.sp) }
-        }
+        if (showTranscript) TranscriptCard("Transcript", s.transcript, maxLines = null)
         TextButton(onClick = { showLog = !showLog }) { Text(if (showLog) "Hide technical log" else "Show technical log") }
         if (showLog) {
+            SectionCard("Audio parts") {
+                st.segments.forEach {
+                    Muted("#${it.number} ${SessionViewModel.clock((it.startMs / 1000).toInt())} ${it.durationMs / 1000}s ${it.state.name.lowercase()} ${it.model ?: ""} ${it.lines} lines ${it.error?.take(120) ?: ""}")
+                }
+            }
             SectionCard("Audit log") { s.audit.takeLast(80).forEach { Text(it, fontSize = 11.sp, fontFamily = FontFamily.Monospace) } }
             SectionCard("Errors") { if (st.errors.isEmpty()) Muted("none") else st.errors.forEach { Muted(it) } }
-            SectionCard("Raw AI responses") { st.aiLog.takeLast(10).forEach { Text(it, fontSize = 10.sp, fontFamily = FontFamily.Monospace) } }
+            SectionCard("Raw AI responses") { st.aiLog.takeLast(12).forEach { Text(it.take(3000), fontSize = 10.sp, fontFamily = FontFamily.Monospace) } }
         }
         Button(onClick = { vm.newConsultation() }, enabled = st.busy == null, modifier = Modifier.fillMaxWidth()) { Text("New consultation") }
         Spacer(Modifier.height(24.dp))
@@ -679,7 +383,7 @@ private fun LabelValue(label: String, value: String) {
 private fun ReviewProblemCard(
     p: Problem,
     accepted: Set<String>,
-    flags: Map<String, np.opd.engine.FlagRecord>,
+    flags: Map<String, FlagRecord>,
     cat: Catalogues,
     vm: SessionViewModel,
     askReason: (String, (String) -> Unit) -> Unit
@@ -752,62 +456,139 @@ private fun ReviewProblemCard(
             }
         }
 
-        // Plan
-        when (p.phase) {
-            Phase.HISTORY -> OutlinedButton(onClick = { vm.act(DoctorAction.UnlockPlan(p.problemId)) }) { Text("Show protocol options now") }
-            Phase.PLAN -> {
-                val rid = p.suggestedRegimenId
-                val reg = rid?.let { cat.regimens[it] }
-                if (reg != null) {
-                    val isAccepted = rid in accepted
-                    Text(
-                        (if (isAccepted) "✓ Accepted: " else "Suggested: ") + reg.label,
-                        color = Palette.okFg, fontWeight = FontWeight.Bold
-                    )
-                    Muted("Line: ${reg.lineOfTherapy.lowercase().replace('_', ' ')} · ${reg.verificationStatus}")
-                    reg.components.forEach { comp ->
-                        val drug = cat.drugs[comp.drugId]
-                        if (drug != null) Column(Modifier.padding(start = 8.dp)) {
-                            Text(Sig.pharmacyLine(comp, drug), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                            Text(Sig.english(comp, drug), fontSize = 13.sp)
-                            Text(Sig.nepali(comp, drug), fontSize = 13.sp)
-                            val pic = Sig.pictogramText(comp)
-                            if (pic.isNotBlank()) Text(pic, fontSize = 15.sp)
-                        }
-                    }
-                    p.suggestionFindings.forEach { FindingLine(it) }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (!isAccepted) Button(onClick = { vm.act(DoctorAction.AcceptRegimen(rid)) }) { Text("Accept") }
-                        OutlinedButton(onClick = { vm.act(DoctorAction.DismissRegimen(rid)) }) { Text(if (isAccepted) "Remove" else "Dismiss") }
-                    }
-                } else if (p.noSafeRegimen) {
-                    Text("No protocol medicine passed the safety checks — doctor's decision.", color = Palette.urgentFg, fontWeight = FontWeight.SemiBold)
-                } else {
-                    Muted("No protocol medicines for this problem.")
-                }
-                if (p.skipReasons.isNotEmpty()) {
-                    Text("Skipped:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    p.skipReasons.forEach { Muted("• $it") }
-                }
-            }
-            Phase.DICTATION -> Muted("Doctor is dictating — AI suggestions are hidden. Dictated items are checked below.")
-            Phase.ESCALATED -> Muted("Protocol OPD medicines are hidden while escalated.")
-        }
+        HorizontalDivider()
+        RxBlock(p, accepted, cat, vm, detailed = true)
         val inv = def?.linkedInvestigations?.mapNotNull { cat.investigations[it]?.name } ?: emptyList()
         if (inv.isNotEmpty()) Muted("Investigations to consider: " + inv.joinToString(", "))
         TextButton(onClick = { vm.act(DoctorAction.RemoveProblem(p.problemId)) }) { Text("Remove this problem", color = Palette.greyFg) }
     }
 }
 
+/* ============================== Shared pieces ============================== */
+
+/** The prescription part of a problem: suggestion in PLAN, "likely prescription" + what is missing in HISTORY. */
 @Composable
-private fun VitalsDialog(current: Vitals, onSave: (Vitals) -> Unit, onDismiss: () -> Unit) {
+internal fun RxBlock(p: Problem, accepted: Set<String>, cat: Catalogues, vm: SessionViewModel, detailed: Boolean) {
+    val def = cat.conditions[p.conditionCode]
+    val hasProtocol = def != null && def.linkedRegimens.isNotEmpty()
+    when (p.phase) {
+        Phase.PLAN -> {
+            val rid = p.suggestedRegimenId
+            val reg = rid?.let { cat.regimens[it] }
+            if (reg != null) {
+                val isAccepted = rid in accepted
+                Text((if (isAccepted) "✓ Accepted: " else "Suggested prescription: ") + reg.label, color = Palette.okFg, fontWeight = FontWeight.Bold)
+                if (detailed) Muted("Line: ${reg.lineOfTherapy.lowercase().replace('_', ' ')} · ${reg.verificationStatus}")
+                RegimenLines(reg, cat, detailed, dim = false)
+                p.suggestionFindings.filter { detailed || it.severity != Severity.CAUTION }.forEach { FindingLine(it) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!isAccepted) Button(onClick = { vm.act(DoctorAction.AcceptRegimen(rid)) }) { Text("Accept") }
+                    OutlinedButton(onClick = { vm.act(DoctorAction.DismissRegimen(rid)) }) { Text(if (isAccepted) "Remove" else "Dismiss") }
+                }
+            } else if (p.noSafeRegimen) {
+                Text("No protocol medicine passed the safety checks — doctor's decision.", color = Palette.urgentFg, fontWeight = FontWeight.SemiBold)
+            } else if (!hasProtocol) {
+                Muted("No protocol medicines for this problem.")
+            }
+            if (detailed && p.skipReasons.isNotEmpty()) {
+                Text("Skipped:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                p.skipReasons.forEach { Muted("• $it") }
+            }
+        }
+        Phase.HISTORY -> {
+            val reg = p.provisionalRegimenId?.let { cat.regimens[it] }
+            if (reg != null) {
+                Text("Likely prescription: ${reg.label}", color = Palette.greyFg, fontWeight = FontWeight.SemiBold)
+                RegimenLines(reg, cat, detailed, dim = true)
+                p.provisionalFindings.filter { it.severity != Severity.CAUTION }.forEach { FindingLine(it) }
+            } else if (hasProtocol) {
+                Muted("No protocol medicine fits the details so far.")
+            } else {
+                Muted("No protocol medicines for this problem.")
+            }
+            if (p.provisionalBlockers.isNotEmpty()) {
+                Text("Before prescribing:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                p.provisionalBlockers.take(if (detailed) 12 else 4).forEach { Muted("• $it") }
+            }
+            if (hasProtocol) OutlinedButton(onClick = { vm.act(DoctorAction.UnlockPlan(p.problemId)) }) { Text("Show prescription now") }
+        }
+        Phase.DICTATION -> Muted("Doctor is dictating — protocol suggestions are hidden. Dictated items are checked separately.")
+        Phase.ESCALATED -> Muted("Protocol OPD medicines are hidden while escalated.")
+    }
+}
+
+@Composable
+private fun RegimenLines(reg: RegimenDef, cat: Catalogues, detailed: Boolean, dim: Boolean) {
+    reg.components.forEach { comp ->
+        val drug = cat.drugs[comp.drugId] ?: return@forEach
+        Column(Modifier.padding(start = 8.dp)) {
+            Text(Sig.pharmacyLine(comp, drug), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = if (dim) Palette.greyFg else Color.Unspecified)
+            if (detailed) {
+                Text(Sig.english(comp, drug), fontSize = 13.sp)
+                Text(Sig.nepali(comp, drug), fontSize = 13.sp)
+                val pic = Sig.pictogramText(comp)
+                if (pic.isNotBlank()) Text(pic, fontSize = 15.sp)
+            }
+        }
+    }
+}
+
+private fun speakerStyle(speaker: String): Pair<String, Color> = when (speaker.lowercase()) {
+    "doctor" -> "Doctor" to Palette.doctor
+    "patient" -> "Patient" to Palette.patient
+    "attendant" -> "Attendant" to Palette.attendant
+    else -> "Speaker" to Palette.unknownSpeaker
+}
+
+@Composable
+internal fun TranscriptCard(title: String, lines: List<TranscriptLine>, maxLines: Int?, footer: @Composable () -> Unit = {}) {
+    SectionCard(title) {
+        val shown = if (maxLines != null) lines.takeLast(maxLines) else lines
+        if (lines.isEmpty()) Muted("Nothing written down yet. Text appears a few seconds after each pause in speech.")
+        if (maxLines != null && lines.size > maxLines) Muted("… ${lines.size - maxLines} earlier lines (full transcript on the review screen)")
+        shown.forEach { l ->
+            val (label, color) = speakerStyle(l.speaker)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(label, color = color, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.width(68.dp).padding(top = 2.dp))
+                Text(l.text, fontSize = 14.sp, color = if (l.speaker == "doctor") Palette.doctor else Color.Unspecified, modifier = Modifier.weight(1f))
+            }
+        }
+        footer()
+    }
+}
+
+@Composable
+internal fun DemographicsDialog(current: Demographics, onSave: (Int?, Gender?) -> Unit, onDismiss: () -> Unit) {
+    var age by remember { mutableStateOf(current.age?.toString() ?: "") }
+    var gender by remember { mutableStateOf(current.gender.takeIf { it != Gender.UNKNOWN }) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Patient") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                NumField("Age (years)", age, Modifier.fillMaxWidth()) { age = it.filter { ch -> ch.isDigit() }.take(3) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Choice("Female", gender == Gender.FEMALE) { gender = Gender.FEMALE }
+                    Choice("Male", gender == Gender.MALE) { gender = Gender.MALE }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(age.toIntOrNull()?.takeIf { it in 0..120 }, gender) }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+internal fun VitalsDialog(current: Vitals, onSave: (Vitals) -> Unit, onDismiss: () -> Unit) {
     var sys by remember { mutableStateOf(current.bpSystolic?.toString() ?: "") }
     var dia by remember { mutableStateOf(current.bpDiastolic?.toString() ?: "") }
     var pulse by remember { mutableStateOf(current.pulse?.toString() ?: "") }
     var rr by remember { mutableStateOf(current.rr?.toString() ?: "") }
     var spo2 by remember { mutableStateOf(current.spo2?.toString() ?: "") }
     var temp by remember { mutableStateOf(current.tempF?.toString() ?: "") }
-    androidx.compose.material3.AlertDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Vitals") },
         text = {
@@ -831,7 +612,8 @@ private fun VitalsDialog(current: Vitals, onSave: (Vitals) -> Unit, onDismiss: (
                 onSave(
                     Vitals(
                         bpSystolic = sys.toIntOrNull(), bpDiastolic = dia.toIntOrNull(), pulse = pulse.toIntOrNull(),
-                        rr = rr.toIntOrNull(), spo2 = spo2.toIntOrNull(), tempF = temp.toDoubleOrNull()
+                        rr = rr.toIntOrNull(), spo2 = spo2.toIntOrNull(), tempF = temp.toDoubleOrNull(),
+                        bloodGlucose = current.bloodGlucose
                     )
                 )
             }) { Text("Save") }

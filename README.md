@@ -25,60 +25,73 @@ If the newest build is missing, open the **Actions** tab: a red ✗ means the bu
 ## 2. Add a key and choose models
 
 The app downloads the **current model list** from each provider, so model names never go out of date.
+Settings has a card for each provider; tap it, paste the key, **Save** (models load automatically).
 
-**Google Gemini (recommended for the speech model)**
-1. Create a free key at **aistudio.google.com/apikey** (needs a Google account).
-2. App → **Settings → Google Gemini key → paste → Save key**. The app loads Gemini models and picks the newest Flash model automatically.
-3. The free tier is fine for role-play testing (rate-limited; Google may use free-tier data to improve its products). Use a paid key for anything beyond that.
+| Provider | Key from | Good for |
+|---|---|---|
+| **Google Gemini** (recommended) | aistudio.google.com/apikey (free) | Speech **and** notes. Flash models hear Nepali audio well. |
+| **OpenRouter** | openrouter.ai/keys | Notes. Hundreds of models, many **FREE** (≈20 requests/min, 50/day; 1,000/day after a $10 top-up). |
+| **OpenCode Zen** | opencode.ai/zen | Notes. One key for a curated model set; some free for a limited time. |
+| **Groq** | console.groq.com/keys | Speech via **Whisper** (fast speech-to-text) plus fast open models for notes. |
+| **Custom** | your server | Any OpenAI-compatible server (LM Studio, Ollama, vLLM…): enter its address (…/v1). |
 
-**OpenRouter (optional, for the notes step)**
-1. Create a key at **openrouter.ai/keys**.
-2. **Settings → OpenRouter key → Save key → Load models.** Models are tagged **FREE**, **PAID**, **AUDIO** (accepts audio) and **JSON** (supports structured output).
-3. Free models (e.g. DeepSeek) are limited to about 20 requests/minute and 50/day (1,000/day after a $10 credit top-up). Live mode uses roughly 3–6 requests per minute.
+Models are tagged **AUDIO** (hears audio), **SPEECH-TO-TEXT** (Whisper-style, transcribes only), **FREE / PAID** and **JSON**.
 
-**Two model slots**
-- **Speech model** — hears the audio. Must have the **AUDIO** tag (Gemini Flash works well for Nepali).
-- **Notes model** — either "same model (one step)" or any text model. In two-step mode the speech model writes a transcript and the notes model turns it into structured notes. This is where free text models such as DeepSeek fit.
+**Three model slots**
+- **Speech model** — hears the audio and writes the live transcript. Needs **AUDIO** or **SPEECH-TO-TEXT**.
+- **Notes model** — reads the transcript and produces the live suggestions and the final note. "Use the speech model for this too" works for Gemini; a Whisper speech model always needs a separate notes model.
+- **Backup model** (recommended) — used automatically when a model is busy (HTTP 503 "high demand", 429 rate limit) or retired. When Gemini models load, the app picks one for you.
 
-Tap **Test selected models** to check both. Keys are encrypted on the phone with the Android Keystore; requests go directly from the phone to Google / OpenRouter.
+The app also adapts to models with restrictions: if a model refuses system ("developer") instructions or JSON mode, the instructions are moved into the message and the format is described in text, and the app remembers this for that model.
 
-There is no reliable free option that needs **no key at all**; both free routes above need a free account key.
+Tap **Test selected models** to check all three. Keys are encrypted on the phone with the Android Keystore; requests go directly from the phone to the provider.
 
 ## 3. Run a test consultation
 
-1. **New consultation** → choose **Live assist** (suggestions while you talk) or **Scribe only**.
-2. Optionally enter age and sex (this lets the safety engine apply pregnancy and age rules from the start).
+1. **New consultation** → **Live assist** (help while you talk) or **Scribe only** (fewer requests).
+2. Age and sex are optional: if you leave them blank, the app fills them from the conversation ("४५ वर्ष", "दिदी", "बुबा", "मेरो श्रीमान्") and marks them **(heard)** so you can check them.
 3. **Start recording**, place the phone between doctor and "patient", keep the app open (screen stays on).
-4. Talk normally in Nepali / English. In live mode, cards appear every ~20 s:
-   - **Taking history**: the next questions to ask and red flags to rule out
-   - **Plan**: a protocol medicine that passed all safety checks, with Accept / Dismiss
-   - **Escalated**: a red flag or high CRB-65 score; OPD medicines are hidden
-   - A red/amber banner appears for any confirmed red flag, whatever the complaint
-5. **End consultation** → the full audio is sent once more for the final note.
-6. On **Review** you can settle conflicts, confirm pregnancy status, enter vitals, mark questions asked, clear red flags (with a reason), override an escalation, accept/dismiss medicines, and **Share** the slip as text.
+4. Talk normally in Nepali / English. The live screen shows, from top to bottom:
+   - **Patient chips** — age, sex, vitals (tap to edit), allergies, current medicines.
+   - **Ask next** — red flags the patient may have mentioned (Present / Absent), red flags to **rule out**, pregnancy check, protocol checklist questions (Asked), the AI's suggested next questions, "don't forget" basics (allergy, current medicines), and conditions that **sound likely from keywords** (Add).
+   - **Problem cards** — while taking history: the **likely prescription** (greyed) and what is still needed before it can be given; in Plan: the suggested prescription that passed all safety checks, with Accept / Dismiss.
+   - **Live transcript** — doctor / patient / attendant lines in colour, a "listening…" line and parts being written down.
+5. **💡 Suggest** cuts the current audio and updates suggestions straight away. **⏸ Pause** does the same and shows a "Paused" summary: what to ask next and the likely prescription so far.
+6. **■ End** → the last audio is transcribed, failed parts are retried, and the notes model writes the final note from the full transcript. If the AI note fails, a **note built on the phone** from everything captured is shown instead (never an empty note), with **Try AI note again**.
+7. On **Review** you can settle conflicts, confirm pregnancy status, enter vitals, mark questions asked, clear red flags (with a reason), override an escalation, accept/dismiss medicines, and **Share** the slip as text.
 
 Tips: say vitals aloud ("BP 150 by 95, SpO2 96"), say exam findings aloud, and say "अब औषधि लेखिदिन्छु" when moving to treatment.
 
 ## 4. How it works
 
 ```
-Mic → gap-free WAV segments (cut at pauses) ──► speech model (+ optional notes model): "what is NEW?" (JSON)
-                         │                                │
-                         │                                ▼
-                         │                   Safety engine (pure Kotlin, no AI)
-                         │                   • merges facts, keeps first-heard age/sex
-                         │                   • AI can only ADD facts or TIGHTEN safety
-                         │                   • red flags, CRB-65, checklists → phase
-                         │                   • picks the protocol regimen itself and
-                         │                     runs allergy / pregnancy / kidney / age /
-                         │                     interaction / cumulative-paracetamol checks
-                         ▼
-            End: full transcript → notes model writes final note → same engine → Review screen
+Mic → gap-free WAV parts (cut at pauses; silent parts skipped)
+   │
+   ├─► speech model ─► live transcript ─┬─► on-phone keyword hints (instant, offline):
+   │   (backup model if busy)           │     possible conditions, red-flag mentions, age/sex
+   │                                    │
+   │                                    └─► notes model: "what is NEW?" (JSON, batched) ─┐
+   │                                                                                     ▼
+   │                                           Safety engine (pure Kotlin, no AI)
+   │                                           • merges facts, keeps first-heard age/sex
+   │                                           • AI can only ADD facts or TIGHTEN safety
+   │                                           • red flags, CRB-65, checklists → phase
+   │                                           • picks the protocol regimen itself and runs
+   │                                             allergy / pregnancy / kidney / age /
+   │                                             interaction / cumulative-paracetamol checks
+   ▼
+End: full transcript → notes model writes the final note (phone-built note if it fails) → Review
 ```
+
+The built-in catalogue (14 common OPD conditions with keywords in Nepali and English, question
+checklists, red flags, regimens and a formulary) runs entirely on the phone. It gives instant
+guidance as soon as a condition is recognised or added, and keeps working when the AI is slow or down;
+the AI adds understanding of free speech on top.
 
 Key safety rules (all enforced in code and covered by tests):
 
 - The AI never chooses a medicine or writes instructions. It reports what was said; the app picks the regimen from the catalogue and fills doses and Nepali instructions from fixed templates.
+- Keyword hints never change the case by themselves; the doctor confirms them with one tap.
 - Only the doctor can loosen safety: clear a red flag, confirm "not pregnant", remove an allergy, override an escalation (with a reason in the audit log).
 - Unknown is never treated as safe (e.g. unknown pregnancy status blocks teratogenic drugs; unassessed CRB-65 items are shown).
 - Measured red flags (RR, SpO2, BP) are confirmed only by numbers, and a later normal reading never silently clears them.
@@ -89,7 +102,7 @@ Key safety rules (all enforced in code and covered by tests):
 |---|---|
 | `engine/src/main/resources/catalogues/v1/` | **All clinical content** (conditions, red flags, regimens, formulary, interactions). Review these JSON files clinically. |
 | `engine/src/main/kotlin/` | Safety engine: reducer, safety checks, Nepali instruction templates, prompt + schema builder. No dependencies. |
-| `engine/src/test/kotlin/` | 41 tests incl. catalogue integrity and a randomized "AI can never loosen safety" check. |
+| `engine/src/test/kotlin/` | 53 tests incl. catalogue integrity, keyword hints with Nepali negation, and a randomized "AI can never loosen safety" check. |
 | `app/` | Android app (Kotlin + Jetpack Compose). |
 | `.github/workflows/build.yml` | Runs the tests, builds the APK, publishes it as a Release. |
 | `keystore/testing.jks` | **Test-only** signing key so updates install over each other. Never use for a published app. |
@@ -99,6 +112,8 @@ Key safety rules (all enforced in code and covered by tests):
 - Recording only works while the app is open on screen (no background recording service yet).
 - No patient records are saved; starting a new consultation deletes the previous audio.
 - No PDF / thermal printing yet (Share as text only).
+- Speaker labels come from the AI and can be wrong (Whisper gives none; the notes model infers them).
+- Free model tiers have daily limits; a 10-minute live consultation uses roughly 40-80 requests.
 - The catalogue covers 14 adult OPD conditions. Children, pregnancy-specific care and emergencies are out of scope.
 - Brand names and safety metadata are best-effort placeholders.
 

@@ -16,16 +16,20 @@ import kotlin.math.sqrt
  * between segments. A segment is closed at the first quiet moment after
  * [targetSeconds], or at most 8 seconds later.
  *
- * [onSegment] is called on the recording thread with (file, startMs, durationMs).
+ * [onSegment] is called on the recording thread with (file, startMs, durationMs, voicedFraction).
+ * voicedFraction = share of the segment louder than the silence threshold (0 = silence).
  */
 class WavSegmentRecorder(
     private val dir: File,
     private val targetSeconds: () -> Int,
-    private val onSegment: (File, Long, Long) -> Unit
+    private val onSegment: (File, Long, Long, Float) -> Unit
 ) {
     @Volatile private var running = false
     @Volatile private var cutRequested = false
     @Volatile var level: Float = 0f
+        private set
+    /** Length of the segment currently being recorded. */
+    @Volatile var currentSegmentMs: Long = 0
         private set
     private var thread: Thread? = null
     private var index = 0
@@ -57,6 +61,7 @@ class WavSegmentRecorder(
         thread?.join(4000)
         thread = null
         level = 0f
+        currentSegmentMs = 0
     }
 
     fun cutNow() {
@@ -81,6 +86,9 @@ class WavSegmentRecorder(
                 }
                 val rms = sqrt(sum / n)
                 level = (rms / 4000.0).coerceIn(0.0, 1.0).toFloat()
+                writer.reads++
+                if (rms >= VOICE_RMS) writer.voicedReads++
+                currentSegmentMs = writer.samples * 1000 / RATE
 
                 val seconds = writer.samples / RATE.toDouble()
                 val target = targetSeconds()
@@ -88,6 +96,7 @@ class WavSegmentRecorder(
                     cutRequested = false
                     finish(writer)
                     seg = null
+                    currentSegmentMs = 0
                 }
             }
         } finally {
@@ -104,7 +113,8 @@ class WavSegmentRecorder(
 
     private fun finish(w: SegmentWriter) {
         val file = w.close()
-        if (w.samples >= RATE / 2) onSegment(file, w.startSample * 1000 / RATE, w.samples * 1000L / RATE)
+        val voiced = if (w.reads == 0) 0f else w.voicedReads.toFloat() / w.reads
+        if (w.samples >= RATE / 2) onSegment(file, w.startSample * 1000 / RATE, w.samples * 1000L / RATE, voiced)
         else file.delete() // shorter than half a second: nothing useful
     }
 
@@ -112,6 +122,8 @@ class WavSegmentRecorder(
         private val raf = RandomAccessFile(file, "rw")
         var samples = 0L
             private set
+        var reads = 0
+        var voicedReads = 0
         private var bytes: ByteBuffer = ByteBuffer.allocate(64 * 1024).order(ByteOrder.LITTLE_ENDIAN)
 
         init {
@@ -150,5 +162,7 @@ class WavSegmentRecorder(
     companion object {
         const val RATE = 16000
         private const val SILENCE_RMS = 450.0
+        /** Quieter than the cut threshold, so soft speech still counts as speech. */
+        private const val VOICE_RMS = 300.0
     }
 }

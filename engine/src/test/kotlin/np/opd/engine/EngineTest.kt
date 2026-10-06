@@ -83,10 +83,143 @@ class EngineTest {
     }
 
     @Test
+    fun localDraftUsesTranscriptAndHintsWhenNothingWasCaptured() {
+        val lines = listOf(
+            TranscriptLine("doctor", "के समस्या छ?", 0),
+            TranscriptLine("patient", "डाक्टर साब, ग्यास्ट्रिक भयो, पेट पोल्छ", 2000)
+        )
+        val s = Reducer.reduce(CaseState(), LiveDelta(transcript = lines), c)
+        val hints = LocalAssist.analyze(s.transcript, c)
+        val n = Notes.localDraft(s, c, hints)
+        assertTrue(n.history.contains("ग्यास्ट्रिक"))
+        assertTrue(n.assessment.contains("keyword match"))
+        assertTrue(n.localDraft)
+    }
+
+    @Test
     fun transcriptModePromptsDifferFromAudioMode() {
-        assertTrue(Prompts.liveSystemPrompt(c, fromTranscript = true).contains("TRANSCRIPT of ONE short new segment"))
+        assertTrue(Prompts.liveSystemPrompt(c, fromTranscript = true).contains("NEW part of the machine TRANSCRIPT"))
         assertTrue(Prompts.liveSystemPrompt(c).contains("AUDIO segment"))
         assertTrue(Prompts.finalSystemPrompt(c).contains("COMPLETE machine transcript"))
+    }
+
+    /* ---------------- on-device hints (LocalAssist) ---------------- */
+
+    private fun line(speaker: String, text: String) = TranscriptLine(speaker, text, 0)
+
+    @Test
+    fun localAssistFindsConditionsAndRedFlags() {
+        val h = LocalAssist.analyze(listOf(
+            line("doctor", "के भयो?"),
+            line("patient", "दुई हप्तादेखि पेट पोल्छ, हिजो कालो दिसा पनि भयो")
+        ), c)
+        assertEquals("COND_APD", h.conditions.first().code)
+        assertEquals(listOf("rf_gi_melena"), h.flagMentions.map { it.id })
+        assertTrue(h.deniedFlags.isEmpty())
+    }
+
+    @Test
+    fun localAssistUnderstandsNegation() {
+        val h = LocalAssist.analyze(listOf(
+            line("patient", "कालो दिसा भएको छैन।"),
+            line("patient", "पसिना आउँदैन, हाततिर पनि दुख्दैन"),
+            line("attendant", "He doesn't have any black stool"),
+            line("patient", "खोकी छैन")
+        ), c)
+        assertTrue(h.flagMentions.isEmpty())
+        assertEquals(setOf("rf_gi_melena", "rf_cp_diaphoresis"), h.deniedFlags.map { it.id }.toSet())
+        assertTrue(h.conditions.none { it.code == "COND_CAP" })
+    }
+
+    @Test
+    fun doctorQuestionsAreNotRedFlagMentions() {
+        val h = LocalAssist.analyze(listOf(line("doctor", "कालो दिसा भएको छ?")), c)
+        assertTrue(h.flagMentions.isEmpty() && h.deniedFlags.isEmpty())
+    }
+
+    @Test
+    fun shortNepaliKeywordsNeedWordBoundaries() {
+        val no = LocalAssist.analyze(listOf(line("patient", "ज्वरो आउँछ, पसिना पनि आउँछ")), c)
+        assertTrue(no.flagMentions.none { it.id == "rf_gi_blood_in_stool" })
+        val yes = LocalAssist.analyze(listOf(line("patient", "दिसामा आउँ देखिन्छ")), c)
+        assertTrue(yes.flagMentions.any { it.id == "rf_gi_blood_in_stool" })
+    }
+
+    @Test
+    fun localAssistGuessesAgeButNotDurations() {
+        assertEquals(45, LocalAssist.analyze(listOf(line("patient", "म ४५ वर्षको भएँ")), c).ageGuess)
+        assertEquals(62, LocalAssist.analyze(listOf(line("doctor", "Age 62, BP 150 by 90")), c).ageGuess)
+        assertNull(LocalAssist.analyze(listOf(line("patient", "५ वर्ष भयो खोकी लागेको")), c).ageGuess)
+    }
+
+    @Test
+    fun localAssistGuessesSexFromFormsOfAddress() {
+        val h = LocalAssist.analyze(listOf(
+            line("doctor", "दिदी, के समस्या छ?"),
+            line("patient", "मेरो श्रीमान्ले ल्याउनुभयो, आमाशय दुख्छ")
+        ), c)
+        assertEquals(Gender.FEMALE, h.genderGuess)
+        assertFalse(h.genderEvidence.contains("आमा")) // "आमाशय" (stomach) is not "mother"
+        assertNull(LocalAssist.analyze(listOf(line("doctor", "the pain")), c).genderGuess)
+    }
+
+    /* ---------------- provisional prescription, AI questions, notes ---------------- */
+
+    @Test
+    fun provisionalRegimenShownWhileTakingHistory() {
+        val s = ai(start(40, Gender.MALE), LiveDelta(problems = listOf(problem("COND_APD", listOf("q_apd_duration")))))
+        val apd = p(s, "COND_APD")
+        assertEquals(Phase.HISTORY, apd.phase)
+        assertNull(apd.suggestedRegimenId)
+        assertEquals("APD-01", apd.provisionalRegimenId)
+        assertTrue(apd.provisionalBlockers.any { it.startsWith("Ask:") })
+        assertTrue(apd.provisionalBlockers.any { it.startsWith("Rule out:") })
+    }
+
+    @Test
+    fun transcriptStaysInTimeOrderWhenASegmentIsRetriedLater() {
+        var s = Reducer.reduce(CaseState(), LiveDelta(transcript = listOf(TranscriptLine("patient", "second", 500))), c, segmentStartMs = 20_000)
+        s = Reducer.reduce(s, LiveDelta(transcript = listOf(TranscriptLine("doctor", "first", 0))), c, segmentStartMs = 0)
+        assertEquals(listOf("first", "second"), s.transcript.map { it.text })
+    }
+
+    @Test
+    fun aiNextQuestionsAreKeptUntilReplaced() {
+        var s = ai(CaseState(), LiveDelta(nextQuestions = listOf(AiQuestion("कालो दिसा भएको छ?", "Any black stool?", "rule out GI bleed"))))
+        assertEquals("Any black stool?", s.aiNextQuestions.single().en)
+        s = ai(s, LiveDelta())
+        assertEquals(1, s.aiNextQuestions.size)
+        val parsed = Prompts.parseDelta("{\"next_questions\":[{\"ne\":\"ज्वरो छ?\",\"en\":\"Any fever?\"}]}")
+        assertEquals("Any fever?", parsed.nextQuestions.single().en)
+    }
+
+    @Test
+    fun finalNoteParsingIsLenient() {
+        val topLevel = Prompts.parseFinal("{\"chief_complaint\":\"Burning epigastric pain\",\"history\":\"2 weeks\",\"assessment\":\"APD\",\"problems\":[{\"condition_code\":\"COND_APD\"}]}")
+        assertEquals("Burning epigastric pain", topLevel.soap.chiefComplaint)
+        assertEquals("COND_APD", topLevel.delta.problems.single().conditionCode)
+        val soapSections = Prompts.parseFinal("{\"note\":{\"subjective\":{\"cc\":\"cough\",\"duration\":\"5 days\"},\"assessment\":[\"CAP\",\"mild\"],\"plan\":\"amoxicillin\"}}")
+        assertTrue(soapSections.soap.history.contains("5 days"))
+        assertEquals("CAP; mild", soapSections.soap.assessment)
+        assertEquals("Not verbalized during consultation", soapSections.soap.examSpoken)
+        var threw = false
+        try { Prompts.parseFinal("{\"soap\":{}}") } catch (e: JsonException) { threw = true }
+        assertTrue("empty note must be reported as a failure", threw)
+    }
+
+    @Test
+    fun localDraftNoteIsNeverEmpty() {
+        val empty = Notes.localDraft(CaseState(), c)
+        assertFalse(empty.isBlank())
+        val s = ai(start(40, Gender.MALE), LiveDelta(
+            problems = listOf(ProblemInput("COND_APD", symptoms = listOf(SymptomInput("epigastric burning", "2 weeks")))),
+            vitals = Vitals(bpSystolic = 130, bpDiastolic = 80)
+        ))
+        val n = Notes.localDraft(s, c)
+        assertTrue(n.localDraft)
+        assertTrue(n.chiefComplaint.contains("epigastric burning"))
+        assertTrue(n.examSpoken.contains("BP 130/80"))
+        assertTrue(n.planSpoken.contains("still to do"))
     }
 
     /* ---------------- review round 7, issue 1: session-level red flags ---------------- */

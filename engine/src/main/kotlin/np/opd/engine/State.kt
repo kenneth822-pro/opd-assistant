@@ -89,7 +89,11 @@ data class Problem(
     val suggestedRegimenId: String? = null,
     val suggestionFindings: List<SafetyFinding> = emptyList(),
     val skipReasons: List<String> = emptyList(),
-    val noSafeRegimen: Boolean = false
+    val noSafeRegimen: Boolean = false,
+    /** While still taking history: what the app WOULD suggest once history is complete, and what is still missing. */
+    val provisionalRegimenId: String? = null,
+    val provisionalFindings: List<SafetyFinding> = emptyList(),
+    val provisionalBlockers: List<String> = emptyList()
 )
 
 data class CurrentMed(
@@ -113,6 +117,9 @@ data class DictatedItem(
 
 data class TranscriptLine(val speaker: String, val text: String, val offsetMs: Long)
 
+/** A follow-up question proposed by the AI (display only; never changes safety state). */
+data class AiQuestion(val ne: String, val en: String, val reason: String = "")
+
 data class CaseState(
     val sessionId: String = UUID.randomUUID().toString(),
     val tick: Int = 0,
@@ -130,6 +137,7 @@ data class CaseState(
     val dismissed: Set<String> = emptySet(),
     val transcript: List<TranscriptLine> = emptyList(),
     val examFindings: List<String> = emptyList(),
+    val aiNextQuestions: List<AiQuestion> = emptyList(),
     // ---- computed by Reducer.evaluate ----
     val sessionLevel: SessionLevel = SessionLevel.INFO,
     val sessionAlerts: List<String> = emptyList(),
@@ -162,7 +170,8 @@ data class LiveDelta(
     val allergies: List<AllergyInput> = emptyList(),
     val comorbidities: List<String> = emptyList(),
     val currentMeds: List<MedInput> = emptyList(),
-    val examFindings: List<String> = emptyList()
+    val examFindings: List<String> = emptyList(),
+    val nextQuestions: List<AiQuestion> = emptyList()
 )
 
 data class ProblemInput(

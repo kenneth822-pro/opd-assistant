@@ -11,16 +11,53 @@
         "INITIAL": {
           "min_questions": 4,
           "required_questions": [
-            { "id": "q_cp_onset", "prompt_en": "When did it start, how long does it last?", "prompt_ne": "छाती दुख्न कहिलेदेखि सुरु भयो, कति बेर दुख्छ?" },
-            { "id": "q_cp_character", "prompt_en": "What does it feel like (pressure, burning, sharp)?", "prompt_ne": "कस्तो दुख्छ? भारी, पोल्ने कि घोच्ने?" },
-            { "id": "q_cp_radiation", "prompt_en": "Does it spread to arm, neck or jaw?", "prompt_ne": "दुखाइ हात, घाँटी वा बङ्गारातिर सर्छ?" },
-            { "id": "q_cp_exertion", "prompt_en": "Worse on walking/exertion, better with rest?", "prompt_ne": "हिँड्दा बढ्छ, आराम गर्दा कम हुन्छ?" }
+            {
+              "id": "q_cp_onset",
+              "prompt_en": "When did it start, how long does it last?",
+              "prompt_ne": "छाती दुख्न कहिलेदेखि सुरु भयो, कति बेर दुख्छ?"
+            },
+            {
+              "id": "q_cp_character",
+              "prompt_en": "What does it feel like (pressure, burning, sharp)?",
+              "prompt_ne": "कस्तो दुख्छ? भारी, पोल्ने कि घोच्ने?"
+            },
+            {
+              "id": "q_cp_radiation",
+              "prompt_en": "Does it spread to arm, neck or jaw?",
+              "prompt_ne": "दुखाइ हात, घाँटी वा बङ्गारातिर सर्छ?"
+            },
+            {
+              "id": "q_cp_exertion",
+              "prompt_en": "Worse on walking/exertion, better with rest?",
+              "prompt_ne": "हिँड्दा बढ्छ, आराम गर्दा कम हुन्छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_cp_rest_pain_20m", "rf_cp_syncope", "rf_cp_diaphoresis"],
+      "mandatory_red_flags": [
+        "rf_cp_rest_pain_20m",
+        "rf_cp_syncope",
+        "rf_cp_diaphoresis"
+      ],
       "linked_regimens": [],
-      "linked_investigations": ["INV_ECG", "INV_TROPONIN", "INV_RBS", "INV_LIPID"]
+      "linked_investigations": [
+        "INV_ECG",
+        "INV_TROPONIN",
+        "INV_RBS",
+        "INV_LIPID"
+      ],
+      "keywords": [
+        "chest pain",
+        "chest tightness",
+        "chest heaviness",
+        "pressure in chest",
+        "छाती दुख",
+        "छातीमा दुख",
+        "छाती भारी",
+        "छाती कस",
+        "छाती च्याप",
+        "छाती थिच"
+      ]
     },
     {
       "condition_code": "COND_APD",
@@ -31,15 +68,52 @@
         "INITIAL": {
           "min_questions": 3,
           "required_questions": [
-            { "id": "q_apd_duration", "prompt_en": "How long has the burning/pain been present?", "prompt_ne": "पेट पोल्न थालेको कति भयो?" },
-            { "id": "q_apd_food", "prompt_en": "Worse on empty stomach or after food?", "prompt_ne": "खाली पेटमा कि खाएपछि बढी पोल्छ?" },
-            { "id": "q_apd_nsaid", "prompt_en": "Taking painkillers (NSAIDs)?", "prompt_ne": "दुखाइ कम गर्ने औषधि खानुहुन्छ?" }
+            {
+              "id": "q_apd_duration",
+              "prompt_en": "How long has the burning/pain been present?",
+              "prompt_ne": "पेट पोल्न थालेको कति भयो?"
+            },
+            {
+              "id": "q_apd_food",
+              "prompt_en": "Worse on empty stomach or after food?",
+              "prompt_ne": "खाली पेटमा कि खाएपछि बढी पोल्छ?"
+            },
+            {
+              "id": "q_apd_nsaid",
+              "prompt_en": "Taking painkillers (NSAIDs)?",
+              "prompt_ne": "दुखाइ कम गर्ने औषधि खानुहुन्छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_gi_melena", "rf_gi_hematemesis", "rf_gi_dysphagia", "rf_gi_weight_loss"],
-      "linked_regimens": ["APD-01", "APD-02"],
-      "linked_investigations": ["INV_CBC", "INV_UGI_ENDO"]
+      "mandatory_red_flags": [
+        "rf_gi_melena",
+        "rf_gi_hematemesis",
+        "rf_gi_dysphagia",
+        "rf_gi_weight_loss"
+      ],
+      "linked_regimens": [
+        "APD-01",
+        "APD-02"
+      ],
+      "linked_investigations": [
+        "INV_CBC",
+        "INV_UGI_ENDO"
+      ],
+      "keywords": [
+        "gastric",
+        "gastritis",
+        "acidity",
+        "heartburn",
+        "epigastric",
+        "indigestion",
+        "ग्यास्ट्रिक",
+        "पेट पोल",
+        "अमिलो",
+        "डकार",
+        "छाती पोल",
+        "पेट फुल"
+      ]
     },
     {
       "condition_code": "COND_CAP",
@@ -50,25 +124,79 @@
         "INITIAL": {
           "min_questions": 3,
           "required_questions": [
-            { "id": "q_cap_cough", "prompt_en": "How long has the cough been present?", "prompt_ne": "खोकी लागेको कति दिन भयो?" },
-            { "id": "q_cap_fever", "prompt_en": "Fever with chills or rigors?", "prompt_ne": "जाडो भएर कामेर ज्वरो आउँछ?" },
-            { "id": "q_cap_sputum", "prompt_en": "Sputum colour, any blood?", "prompt_ne": "खकार कस्तो रङको छ, रगत मिसिएको छ?" }
+            {
+              "id": "q_cap_cough",
+              "prompt_en": "How long has the cough been present?",
+              "prompt_ne": "खोकी लागेको कति दिन भयो?"
+            },
+            {
+              "id": "q_cap_fever",
+              "prompt_en": "Fever with chills or rigors?",
+              "prompt_ne": "जाडो भएर कामेर ज्वरो आउँछ?"
+            },
+            {
+              "id": "q_cap_sputum",
+              "prompt_en": "Sputum colour, any blood?",
+              "prompt_ne": "खकार कस्तो रङको छ, रगत मिसिएको छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_confusion"],
+      "mandatory_red_flags": [
+        "rf_confusion"
+      ],
       "scored_criteria": {
         "score_name": "CRB-65",
         "escalate_threshold": 2,
         "components": [
-          { "id": "crb_c", "label": "Confusion", "points": 1, "flag_ref": "rf_confusion" },
-          { "id": "crb_r", "label": "RR >= 30", "points": 1, "flag_ref": "rf_rr_ge30" },
-          { "id": "crb_b", "label": "Low BP", "points": 1, "flag_ref": "rf_hypotension" },
-          { "id": "crb_65", "label": "Age >= 65", "points": 1, "rule": { "field": "age", "op": ">=", "value": 65 } }
+          {
+            "id": "crb_c",
+            "label": "Confusion",
+            "points": 1,
+            "flag_ref": "rf_confusion"
+          },
+          {
+            "id": "crb_r",
+            "label": "RR >= 30",
+            "points": 1,
+            "flag_ref": "rf_rr_ge30"
+          },
+          {
+            "id": "crb_b",
+            "label": "Low BP",
+            "points": 1,
+            "flag_ref": "rf_hypotension"
+          },
+          {
+            "id": "crb_65",
+            "label": "Age >= 65",
+            "points": 1,
+            "rule": {
+              "field": "age",
+              "op": ">=",
+              "value": 65
+            }
+          }
         ]
       },
-      "linked_regimens": ["CAP-01", "CAP-02"],
-      "linked_investigations": ["INV_CXR", "INV_CBC"]
+      "linked_regimens": [
+        "CAP-01",
+        "CAP-02"
+      ],
+      "linked_investigations": [
+        "INV_CXR",
+        "INV_CBC"
+      ],
+      "keywords": [
+        "cough",
+        "phlegm",
+        "sputum",
+        "pneumonia",
+        "chest infection",
+        "खोकी",
+        "खकार",
+        "निमोनिया"
+      ]
     },
     {
       "condition_code": "COND_HTN",
@@ -79,21 +207,55 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_htn_known", "prompt_en": "Known high BP before? Since when?", "prompt_ne": "पहिले प्रेसर बढेको थाहा थियो? कहिलेदेखि?" },
-            { "id": "q_htn_symptoms", "prompt_en": "Headache, blurred vision, chest pain?", "prompt_ne": "टाउको दुख्ने, आँखा धमिलो, छाती दुख्ने छ?" },
-            { "id": "q_htn_meds", "prompt_en": "Any current BP medicines?", "prompt_ne": "प्रेसरको औषधि खाइरहनुभएको छ?" }
+            {
+              "id": "q_htn_known",
+              "prompt_en": "Known high BP before? Since when?",
+              "prompt_ne": "पहिले प्रेसर बढेको थाहा थियो? कहिलेदेखि?"
+            },
+            {
+              "id": "q_htn_symptoms",
+              "prompt_en": "Headache, blurred vision, chest pain?",
+              "prompt_ne": "टाउको दुख्ने, आँखा धमिलो, छाती दुख्ने छ?"
+            },
+            {
+              "id": "q_htn_meds",
+              "prompt_en": "Any current BP medicines?",
+              "prompt_ne": "प्रेसरको औषधि खाइरहनुभएको छ?"
+            }
           ]
         },
         "FOLLOW_UP": {
           "min_questions": 1,
           "required_questions": [
-            { "id": "q_htn_adherence", "prompt_en": "Taking BP medicines regularly?", "prompt_ne": "प्रेसरको औषधि नियमित खाइरहनुभएको छ?" }
+            {
+              "id": "q_htn_adherence",
+              "prompt_en": "Taking BP medicines regularly?",
+              "prompt_ne": "प्रेसरको औषधि नियमित खाइरहनुभएको छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_htn_emergency"],
-      "linked_regimens": ["HTN-02", "HTN-01"],
-      "linked_investigations": ["INV_RFT", "INV_RBS", "INV_LIPID", "INV_ECG", "INV_URINE_RE"]
+      "mandatory_red_flags": [
+        "rf_htn_emergency"
+      ],
+      "linked_regimens": [
+        "HTN-02",
+        "HTN-01"
+      ],
+      "linked_investigations": [
+        "INV_RFT",
+        "INV_RBS",
+        "INV_LIPID",
+        "INV_ECG",
+        "INV_URINE_RE"
+      ],
+      "keywords": [
+        "blood pressure",
+        "hypertension",
+        "high pressure",
+        "प्रेसर",
+        "रक्तचाप"
+      ]
     },
     {
       "condition_code": "COND_T2DM",
@@ -104,22 +266,63 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_dm_osmotic", "prompt_en": "Frequent urination, excessive thirst?", "prompt_ne": "पिसाब धेरै लाग्ने, तिर्खा धेरै लाग्ने?" },
-            { "id": "q_dm_hypo", "prompt_en": "Episodes of shaking/sweating (low sugar)?", "prompt_ne": "हात काम्ने, पसिना आउने हुन्छ?" },
-            { "id": "q_dm_meds", "prompt_en": "Any current diabetes medicines?", "prompt_ne": "सुगरको औषधि खाइरहनुभएको छ?" }
+            {
+              "id": "q_dm_osmotic",
+              "prompt_en": "Frequent urination, excessive thirst?",
+              "prompt_ne": "पिसाब धेरै लाग्ने, तिर्खा धेरै लाग्ने?"
+            },
+            {
+              "id": "q_dm_hypo",
+              "prompt_en": "Episodes of shaking/sweating (low sugar)?",
+              "prompt_ne": "हात काम्ने, पसिना आउने हुन्छ?"
+            },
+            {
+              "id": "q_dm_meds",
+              "prompt_en": "Any current diabetes medicines?",
+              "prompt_ne": "सुगरको औषधि खाइरहनुभएको छ?"
+            }
           ]
         },
         "FOLLOW_UP": {
           "min_questions": 1,
           "required_questions": [
-            { "id": "q_dm_adherence", "prompt_en": "Taking diabetes medicines regularly?", "prompt_ne": "सुगरको औषधि नियमित खाइरहनुभएको छ?" },
-            { "id": "q_dm_hypo_fu", "prompt_en": "Any low-sugar episodes since last visit?", "prompt_ne": "सुगर घटेर काम्ने भएको छ?" }
+            {
+              "id": "q_dm_adherence",
+              "prompt_en": "Taking diabetes medicines regularly?",
+              "prompt_ne": "सुगरको औषधि नियमित खाइरहनुभएको छ?"
+            },
+            {
+              "id": "q_dm_hypo_fu",
+              "prompt_en": "Any low-sugar episodes since last visit?",
+              "prompt_ne": "सुगर घटेर काम्ने भएको छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_dm_dka", "rf_dm_foot_infection"],
-      "linked_regimens": ["T2DM-01", "T2DM-02"],
-      "linked_investigations": ["INV_RBS", "INV_HBA1C", "INV_RFT", "INV_LIPID", "INV_URINE_RE"]
+      "mandatory_red_flags": [
+        "rf_dm_dka",
+        "rf_dm_foot_infection"
+      ],
+      "linked_regimens": [
+        "T2DM-01",
+        "T2DM-02"
+      ],
+      "linked_investigations": [
+        "INV_RBS",
+        "INV_HBA1C",
+        "INV_RFT",
+        "INV_LIPID",
+        "INV_URINE_RE"
+      ],
+      "keywords": [
+        "diabetes",
+        "sugar",
+        "glucose",
+        "diabetic",
+        "सुगर",
+        "मधुमेह",
+        "चिनी रोग"
+      ]
     },
     {
       "condition_code": "COND_AGE",
@@ -130,15 +333,48 @@
         "INITIAL": {
           "min_questions": 3,
           "required_questions": [
-            { "id": "q_age_stools", "prompt_en": "How many loose stools in 24 hours?", "prompt_ne": "२४ घण्टामा कति पटक पातलो दिसा भयो?" },
-            { "id": "q_age_vomiting", "prompt_en": "Any vomiting? How often?", "prompt_ne": "बान्ता भएको छ? कति पटक?" },
-            { "id": "q_age_intake", "prompt_en": "Able to drink fluids/ORS?", "prompt_ne": "पानी, जीवनजल पिउन सक्नुहुन्छ?" }
+            {
+              "id": "q_age_stools",
+              "prompt_en": "How many loose stools in 24 hours?",
+              "prompt_ne": "२४ घण्टामा कति पटक पातलो दिसा भयो?"
+            },
+            {
+              "id": "q_age_vomiting",
+              "prompt_en": "Any vomiting? How often?",
+              "prompt_ne": "बान्ता भएको छ? कति पटक?"
+            },
+            {
+              "id": "q_age_intake",
+              "prompt_en": "Able to drink fluids/ORS?",
+              "prompt_ne": "पानी, जीवनजल पिउन सक्नुहुन्छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_age_severe_dehydration", "rf_age_unable_to_drink", "rf_gi_blood_in_stool"],
-      "linked_regimens": ["AGE-01"],
-      "linked_investigations": ["INV_STOOL_RE"]
+      "mandatory_red_flags": [
+        "rf_age_severe_dehydration",
+        "rf_age_unable_to_drink",
+        "rf_gi_blood_in_stool"
+      ],
+      "linked_regimens": [
+        "AGE-01"
+      ],
+      "linked_investigations": [
+        "INV_STOOL_RE"
+      ],
+      "keywords": [
+        "diarrhea",
+        "diarrhoea",
+        "loose motion",
+        "loose stool",
+        "watery stool",
+        "vomiting",
+        "पखाला",
+        "पातलो दिसा",
+        "बान्ता",
+        "झाडापखाला",
+        "छेरपट्टी"
+      ]
     },
     {
       "condition_code": "COND_DYSENTERY",
@@ -149,14 +385,40 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_dys_tenesmus", "prompt_en": "Straining / urge without passing stool?", "prompt_ne": "दिसा गर्दा कन्नुपर्ने, पेट बाउँडिने?" },
-            { "id": "q_dys_fever", "prompt_en": "Fever?", "prompt_ne": "ज्वरो आएको छ?" }
+            {
+              "id": "q_dys_tenesmus",
+              "prompt_en": "Straining / urge without passing stool?",
+              "prompt_ne": "दिसा गर्दा कन्नुपर्ने, पेट बाउँडिने?"
+            },
+            {
+              "id": "q_dys_fever",
+              "prompt_en": "Fever?",
+              "prompt_ne": "ज्वरो आएको छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_age_severe_dehydration", "rf_acute_abdomen"],
-      "linked_regimens": ["DYS-01", "DYS-02"],
-      "linked_investigations": ["INV_STOOL_RE", "INV_CBC"]
+      "mandatory_red_flags": [
+        "rf_age_severe_dehydration",
+        "rf_acute_abdomen"
+      ],
+      "linked_regimens": [
+        "DYS-01",
+        "DYS-02"
+      ],
+      "linked_investigations": [
+        "INV_STOOL_RE",
+        "INV_CBC"
+      ],
+      "keywords": [
+        "dysentery",
+        "blood in stool",
+        "bloody stool",
+        "mucus in stool",
+        "आउँ",
+        "दिसामा रगत",
+        "रगत मिसिएको दिसा"
+      ]
     },
     {
       "condition_code": "COND_ENTERIC",
@@ -167,15 +429,44 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_ent_fever_pattern", "prompt_en": "How many days of fever, rising pattern?", "prompt_ne": "ज्वरो कति दिनदेखि, दिनदिनै बढ्दै छ?" },
-            { "id": "q_ent_gi", "prompt_en": "Abdominal pain, constipation or diarrhoea?", "prompt_ne": "पेट दुख्ने, कब्जियत वा पखाला?" },
-            { "id": "q_ent_prior_abx", "prompt_en": "Already taken antibiotics?", "prompt_ne": "पहिले नै एन्टिबायोटिक खानुभयो?" }
+            {
+              "id": "q_ent_fever_pattern",
+              "prompt_en": "How many days of fever, rising pattern?",
+              "prompt_ne": "ज्वरो कति दिनदेखि, दिनदिनै बढ्दै छ?"
+            },
+            {
+              "id": "q_ent_gi",
+              "prompt_en": "Abdominal pain, constipation or diarrhoea?",
+              "prompt_ne": "पेट दुख्ने, कब्जियत वा पखाला?"
+            },
+            {
+              "id": "q_ent_prior_abx",
+              "prompt_en": "Already taken antibiotics?",
+              "prompt_ne": "पहिले नै एन्टिबायोटिक खानुभयो?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_confusion", "rf_acute_abdomen"],
-      "linked_regimens": ["ENT-01", "ENT-02"],
-      "linked_investigations": ["INV_BLOOD_CULTURE", "INV_CBC", "INV_LFT"]
+      "mandatory_red_flags": [
+        "rf_confusion",
+        "rf_acute_abdomen"
+      ],
+      "linked_regimens": [
+        "ENT-01",
+        "ENT-02"
+      ],
+      "linked_investigations": [
+        "INV_BLOOD_CULTURE",
+        "INV_CBC",
+        "INV_LFT"
+      ],
+      "keywords": [
+        "typhoid",
+        "enteric",
+        "fever",
+        "टाइफाइड",
+        "ज्वरो"
+      ]
     },
     {
       "condition_code": "COND_COPD",
@@ -186,14 +477,45 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_copd_sputum", "prompt_en": "More sputum or change in colour?", "prompt_ne": "खकार बढेको वा रङ फेरिएको छ?" },
-            { "id": "q_copd_breathless", "prompt_en": "Breathlessness worse than usual?", "prompt_ne": "सधैँभन्दा बढी सास फेर्न गाह्रो छ?" }
+            {
+              "id": "q_copd_sputum",
+              "prompt_en": "More sputum or change in colour?",
+              "prompt_ne": "खकार बढेको वा रङ फेरिएको छ?"
+            },
+            {
+              "id": "q_copd_breathless",
+              "prompt_en": "Breathlessness worse than usual?",
+              "prompt_ne": "सधैँभन्दा बढी सास फेर्न गाह्रो छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_confusion", "rf_spo2_lt88", "rf_rr_ge30"],
-      "linked_regimens": ["COPD-01"],
-      "linked_investigations": ["INV_SPO2", "INV_CXR", "INV_CBC"]
+      "mandatory_red_flags": [
+        "rf_confusion",
+        "rf_spo2_lt88",
+        "rf_rr_ge30"
+      ],
+      "linked_regimens": [
+        "COPD-01"
+      ],
+      "linked_investigations": [
+        "INV_SPO2",
+        "INV_CXR",
+        "INV_CBC"
+      ],
+      "keywords": [
+        "copd",
+        "smoker",
+        "smoking",
+        "breathless",
+        "shortness of breath",
+        "दम",
+        "सास फेर्न गाह्रो",
+        "धुम्रपान",
+        "चुरोट",
+        "बिँडी",
+        "सास बढ"
+      ]
     },
     {
       "condition_code": "COND_ASTHMA",
@@ -204,14 +526,38 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_asth_night", "prompt_en": "Wakes at night with cough/wheeze?", "prompt_ne": "राति खोकी वा घ्यारघ्यार भएर ब्युँझनुहुन्छ?" },
-            { "id": "q_asth_triggers", "prompt_en": "Triggers (dust, cold, smoke)?", "prompt_ne": "धुलो, चिसो, धुवाँले बढ्छ?" }
+            {
+              "id": "q_asth_night",
+              "prompt_en": "Wakes at night with cough/wheeze?",
+              "prompt_ne": "राति खोकी वा घ्यारघ्यार भएर ब्युँझनुहुन्छ?"
+            },
+            {
+              "id": "q_asth_triggers",
+              "prompt_en": "Triggers (dust, cold, smoke)?",
+              "prompt_ne": "धुलो, चिसो, धुवाँले बढ्छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_asth_cannot_complete_sentences", "rf_asth_silent_chest"],
-      "linked_regimens": ["ASTH-01"],
-      "linked_investigations": ["INV_SPO2"]
+      "mandatory_red_flags": [
+        "rf_asth_cannot_complete_sentences",
+        "rf_asth_silent_chest"
+      ],
+      "linked_regimens": [
+        "ASTH-01"
+      ],
+      "linked_investigations": [
+        "INV_SPO2"
+      ],
+      "keywords": [
+        "asthma",
+        "wheeze",
+        "wheezing",
+        "inhaler",
+        "घ्यारघ्यार",
+        "इन्हेलर",
+        "दम"
+      ]
     },
     {
       "condition_code": "COND_ALLERGIC_RHINITIS",
@@ -222,14 +568,40 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_ar_sneezing", "prompt_en": "Sneezing and itchy nose?", "prompt_ne": "हाच्छ्युँ आउने, नाक चिलाउने?" },
-            { "id": "q_ar_discharge", "prompt_en": "Clear watery nasal discharge?", "prompt_ne": "नाकबाट पातलो पानी बग्छ?" }
+            {
+              "id": "q_ar_sneezing",
+              "prompt_en": "Sneezing and itchy nose?",
+              "prompt_ne": "हाच्छ्युँ आउने, नाक चिलाउने?"
+            },
+            {
+              "id": "q_ar_discharge",
+              "prompt_en": "Clear watery nasal discharge?",
+              "prompt_ne": "नाकबाट पातलो पानी बग्छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_ar_unilateral_bleed"],
-      "linked_regimens": ["AR-01"],
-      "linked_investigations": []
+      "mandatory_red_flags": [
+        "rf_ar_unilateral_bleed"
+      ],
+      "linked_regimens": [
+        "AR-01"
+      ],
+      "linked_investigations": [],
+      "keywords": [
+        "sneez",
+        "runny nose",
+        "itchy nose",
+        "blocked nose",
+        "allergy",
+        "हाच्छ्युँ",
+        "हाछ्युँ",
+        "नाक बग",
+        "नाक चिला",
+        "नाक बन्द",
+        "एलर्जी",
+        "रुघा"
+      ]
     },
     {
       "condition_code": "COND_LOW_BACK_PAIN",
@@ -240,14 +612,38 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_lbp_onset", "prompt_en": "Started after lifting/bending? How long?", "prompt_ne": "भारी उठाउँदा वा निहुरिँदा सुरु भयो? कति भयो?" },
-            { "id": "q_lbp_radiation", "prompt_en": "Pain spreading down the leg below the knee?", "prompt_ne": "दुखाइ खुट्टा हुँदै घुँडामुनि सर्छ?" }
+            {
+              "id": "q_lbp_onset",
+              "prompt_en": "Started after lifting/bending? How long?",
+              "prompt_ne": "भारी उठाउँदा वा निहुरिँदा सुरु भयो? कति भयो?"
+            },
+            {
+              "id": "q_lbp_radiation",
+              "prompt_en": "Pain spreading down the leg below the knee?",
+              "prompt_ne": "दुखाइ खुट्टा हुँदै घुँडामुनि सर्छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_lbp_bladder_bowel", "rf_lbp_saddle_numbness", "rf_lbp_fever_spine"],
-      "linked_regimens": ["LBP-01"],
-      "linked_investigations": []
+      "mandatory_red_flags": [
+        "rf_lbp_bladder_bowel",
+        "rf_lbp_saddle_numbness",
+        "rf_lbp_fever_spine"
+      ],
+      "linked_regimens": [
+        "LBP-01"
+      ],
+      "linked_investigations": [],
+      "keywords": [
+        "back pain",
+        "backache",
+        "low back",
+        "waist pain",
+        "कम्मर दुख",
+        "ढाड दुख",
+        "कम्मर",
+        "ढाड"
+      ]
     },
     {
       "condition_code": "COND_TENSION_HEADACHE",
@@ -258,14 +654,35 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_head_character", "prompt_en": "Band-like tightness on both sides?", "prompt_ne": "टाउको वरिपरि बाँधे जस्तो दुख्छ?" },
-            { "id": "q_head_nausea", "prompt_en": "Any nausea or vomiting?", "prompt_ne": "वाकवाक वा बान्ता हुन्छ?" }
+            {
+              "id": "q_head_character",
+              "prompt_en": "Band-like tightness on both sides?",
+              "prompt_ne": "टाउको वरिपरि बाँधे जस्तो दुख्छ?"
+            },
+            {
+              "id": "q_head_nausea",
+              "prompt_en": "Any nausea or vomiting?",
+              "prompt_ne": "वाकवाक वा बान्ता हुन्छ?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_meningism", "rf_head_thunderclap", "rf_head_focal_deficit"],
-      "linked_regimens": ["HEAD-01"],
-      "linked_investigations": []
+      "mandatory_red_flags": [
+        "rf_meningism",
+        "rf_head_thunderclap",
+        "rf_head_focal_deficit"
+      ],
+      "linked_regimens": [
+        "HEAD-01"
+      ],
+      "linked_investigations": [],
+      "keywords": [
+        "headache",
+        "head pain",
+        "head ache",
+        "टाउको दुख",
+        "टाउको"
+      ]
     },
     {
       "condition_code": "COND_UTI",
@@ -276,14 +693,40 @@
         "INITIAL": {
           "min_questions": 2,
           "required_questions": [
-            { "id": "q_uti_dysuria", "prompt_en": "Burning when passing urine?", "prompt_ne": "पिसाब गर्दा पोल्छ?" },
-            { "id": "q_uti_frequency", "prompt_en": "Passing urine often / urgently?", "prompt_ne": "छिटो छिटो पिसाब लाग्छ, रोक्न सकिँदैन?" }
+            {
+              "id": "q_uti_dysuria",
+              "prompt_en": "Burning when passing urine?",
+              "prompt_ne": "पिसाब गर्दा पोल्छ?"
+            },
+            {
+              "id": "q_uti_frequency",
+              "prompt_en": "Passing urine often / urgently?",
+              "prompt_ne": "छिटो छिटो पिसाब लाग्छ, रोक्न सकिँदैन?"
+            }
           ]
         }
       },
-      "mandatory_red_flags": ["rf_uti_pyelo"],
-      "linked_regimens": ["UTI-01", "UTI-02"],
-      "linked_investigations": ["INV_URINE_RE", "INV_URINE_CS"]
+      "mandatory_red_flags": [
+        "rf_uti_pyelo"
+      ],
+      "linked_regimens": [
+        "UTI-01",
+        "UTI-02"
+      ],
+      "linked_investigations": [
+        "INV_URINE_RE",
+        "INV_URINE_CS"
+      ],
+      "keywords": [
+        "burning urine",
+        "burning micturition",
+        "dysuria",
+        "urine",
+        "urinary",
+        "पिसाब पोल",
+        "पिसाब",
+        "छिटो छिटो पिसाब"
+      ]
     }
   ]
 }

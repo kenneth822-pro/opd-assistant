@@ -1,6 +1,7 @@
 package np.opd.assistant.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -49,6 +50,10 @@ object Palette {
     val infoFg = Color(0xFF123A5A)
     val greyBg = Color(0xFFEDEFF1)
     val greyFg = Color(0xFF3C4043)
+    val doctor = Color(0xFF1A4F8B)
+    val patient = Color(0xFF1B6B3A)
+    val attendant = Color(0xFF6A3D9A)
+    val unknownSpeaker = Color(0xFF5F6368)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,6 +97,20 @@ fun Pill(text: String, bg: Color, fg: Color) {
         modifier = Modifier
             .background(bg, RoundedCornerShape(10.dp))
             .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
+}
+
+@Composable
+fun ChipButton(text: String, bg: Color, fg: Color, onClick: () -> Unit) {
+    Text(
+        text,
+        color = fg,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .background(bg, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     )
 }
 
@@ -141,7 +160,7 @@ fun SectionCard(title: String, container: Color = Color.Unspecified, content: @C
     val colors = if (container == Color.Unspecified) CardDefaults.cardColors() else CardDefaults.cardColors(containerColor = container)
     Card(modifier = Modifier.fillMaxWidth(), colors = colors) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            if (title.isNotBlank()) Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             content()
         }
     }

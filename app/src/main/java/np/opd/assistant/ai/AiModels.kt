@@ -5,9 +5,21 @@ import kotlinx.coroutines.withContext
 import np.opd.engine.J
 import okhttp3.Request
 
-enum class Provider(val label: String) { GEMINI("Google Gemini"), OPENROUTER("OpenRouter") }
+/**
+ * AI providers. Everything except Gemini speaks the OpenAI "chat completions" format,
+ * so one client covers OpenRouter, OpenCode Zen, Groq and any custom server.
+ */
+enum class Provider(val label: String, val defaultBaseUrl: String?, val keyHelp: String) {
+    GEMINI("Google Gemini", null, "Free key at aistudio.google.com/apikey"),
+    OPENROUTER("OpenRouter", "https://openrouter.ai/api/v1", "Key at openrouter.ai/keys. Many models, some free."),
+    OPENCODE("OpenCode Zen", "https://opencode.ai/zen/v1", "Key at opencode.ai/zen. Curated models, some free for a limited time."),
+    GROQ("Groq", "https://api.groq.com/openai/v1", "Key at console.groq.com/keys. Very fast; Whisper speech-to-text and open models; free tier with limits."),
+    CUSTOM("Custom (OpenAI-compatible)", null, "Any server with /models and /chat/completions (e.g. a local LLM server).");
 
-/** One model the user can pick. free = null means "depends on your key/plan" (Gemini). */
+    val openAiCompatible: Boolean get() = this != GEMINI
+}
+
+/** One model the user can pick. free = null means "depends on your key/plan". */
 data class ModelInfo(
     val provider: Provider,
     val id: String,
@@ -16,19 +28,22 @@ data class ModelInfo(
     val free: Boolean?,
     val structuredOutput: Boolean,
     val jsonMode: Boolean,
-    val contextLength: Int? = null
+    val contextLength: Int? = null,
+    /** Speech-to-text model used through /audio/transcriptions (e.g. Whisper). */
+    val transcriptionApi: Boolean = false
 ) {
     val key: String get() = provider.name + "|" + id
 
     fun tags(): List<String> = listOfNotNull(
-        if (audioInput) "AUDIO" else null,
+        if (transcriptionApi) "SPEECH-TO-TEXT" else if (audioInput) "AUDIO" else null,
         when (free) { true -> "FREE"; false -> "PAID"; null -> null },
-        if (structuredOutput) "JSON" else if (jsonMode) "json" else null
+        if (structuredOutput) "JSON" else null
     )
 
     fun toJ(): J.Obj = J.obj(
         "provider" to provider.name, "id" to id, "name" to name, "audio" to audioInput,
-        "free" to free, "structured" to structuredOutput, "json_mode" to jsonMode, "context" to contextLength
+        "free" to free, "structured" to structuredOutput, "json_mode" to jsonMode, "context" to contextLength,
+        "transcription" to transcriptionApi
     )
 
     companion object {
@@ -41,7 +56,8 @@ data class ModelInfo(
                 free = o.bool("free"),
                 structuredOutput = o.bool("structured") ?: false,
                 jsonMode = o.bool("json_mode") ?: false,
-                contextLength = o.int("context")
+                contextLength = o.int("context"),
+                transcriptionApi = o.bool("transcription") ?: false
             )
         } catch (e: Exception) {
             null
@@ -84,8 +100,8 @@ object ModelDirectory {
                     name = m.strOr("displayName", id),
                     audioInput = id.startsWith("gemini"),
                     free = null,
-                    structuredOutput = true,
-                    jsonMode = true,
+                    structuredOutput = !id.startsWith("gemma"),
+                    jsonMode = !id.startsWith("gemma"),
                     contextLength = m.int("inputTokenLimit")
                 )
             }
@@ -95,16 +111,14 @@ object ModelDirectory {
         out.sortedWith(compareByDescending<ModelInfo> { geminiVersion(it.id) }.thenBy { rankGemini(it.id) }.thenBy { it.id })
     }
 
-    /** OpenRouter's catalogue is public; the key is only needed to call models. */
+    /** OpenRouter's catalogue is public and rich (prices, input types, supported parameters). */
     suspend fun openRouter(): List<ModelInfo> = withContext(Dispatchers.IO) {
         val req = Request.Builder().url("https://openrouter.ai/api/v1/models").get().build()
         val root = Http.json(req)
         root.objs("data").mapNotNull { m ->
             val id = m.str("id") ?: return@mapNotNull null
             val pricing = m.obj("pricing")
-            val promptPrice = pricing?.dbl("prompt")
-            val completionPrice = pricing?.dbl("completion")
-            val free = id.endsWith(":free") || (promptPrice == 0.0 && completionPrice == 0.0)
+            val free = id.endsWith(":free") || (pricing != null && pricing.dbl("prompt") == 0.0 && pricing.dbl("completion") == 0.0)
             val inputs = m.obj("architecture")?.strs("input_modalities") ?: emptyList()
             val outputs = m.obj("architecture")?.strs("output_modalities") ?: listOf("text")
             if ("text" !in outputs) return@mapNotNull null
@@ -122,14 +136,43 @@ object ModelDirectory {
         }.sortedWith(compareByDescending<ModelInfo> { it.free == true }.thenBy { it.name.lowercase() })
     }
 
+    /** Standard OpenAI-style GET /models (OpenCode Zen, Groq, custom servers). */
+    suspend fun openAiCompatible(provider: Provider, baseUrl: String, apiKey: String): List<ModelInfo> = withContext(Dispatchers.IO) {
+        if (baseUrl.isBlank()) throw ApiException("Enter the server address first.")
+        val b = Request.Builder().url(baseUrl.trimEnd('/') + "/models").get()
+        if (apiKey.isNotBlank()) b.header("Authorization", "Bearer ${apiKey.trim()}")
+        val root = Http.json(b.build())
+        root.objs("data").mapNotNull { m ->
+            val id = m.str("id") ?: return@mapNotNull null
+            if (m.bool("active") == false) return@mapNotNull null
+            val lower = id.lowercase()
+            if (listOf("tts", "playai", "orpheus", "embed", "guard", "image").any { lower.contains(it) }) return@mapNotNull null
+            val stt = listOf("whisper", "transcribe", "speech-to-text", "distil").any { lower.contains(it) }
+            val name = m.str("name") ?: m.str("display_name") ?: id
+            ModelInfo(
+                provider = provider,
+                id = id,
+                name = name,
+                audioInput = stt || lower.contains("audio"),
+                free = if (lower.contains("free") || name.lowercase().contains("free")) true else null,
+                structuredOutput = false,
+                jsonMode = provider == Provider.GROQ,
+                contextLength = m.int("context_window") ?: m.int("context_length"),
+                transcriptionApi = stt
+            )
+        }.sortedWith(compareByDescending<ModelInfo> { it.transcriptionApi }.thenByDescending { it.free == true }.thenBy { it.id })
+    }
+
     /** A sensible starting choice from the Gemini list: newest stable "flash" model that takes audio. */
-    fun bestGeminiDefault(models: List<ModelInfo>): ModelInfo? {
-        val flash = models.filter { it.audioInput && it.id.contains("flash") && !it.id.contains("lite") }
+    fun bestGeminiDefault(models: List<ModelInfo>, excludeId: String? = null): ModelInfo? {
+        val pool = models.filter { it.audioInput && it.id != excludeId }
+        val flash = pool.filter { it.id.contains("flash") }
         return flash.sortedWith(
-            compareByDescending<ModelInfo> { geminiVersion(it.id) }
+            compareBy<ModelInfo> { if (it.id.contains("lite")) 1 else 0 }
+                .thenByDescending { geminiVersion(it.id) }
                 .thenBy { if (it.id.contains("preview") || it.id.contains("exp")) 1 else 0 }
                 .thenBy { it.id.length }
-        ).firstOrNull() ?: models.firstOrNull { it.audioInput }
+        ).firstOrNull() ?: pool.firstOrNull()
     }
 
     private fun geminiVersion(id: String): Double =

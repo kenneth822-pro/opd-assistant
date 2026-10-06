@@ -14,8 +14,12 @@ object Prompts {
         val assessment: String = "",
         val planSpoken: String = "",
         val followUp: String = "",
-        val adviceSpoken: String = ""
-    )
+        val adviceSpoken: String = "",
+        /** True when built on the phone from captured facts because the AI note was unavailable. */
+        val localDraft: Boolean = false
+    ) {
+        fun isBlank(): Boolean = listOf(chiefComplaint, history, assessment, planSpoken).all { it.isBlank() }
+    }
 
     data class FinalResult(val soap: SoapNote, val delta: LiveDelta)
 
@@ -59,13 +63,13 @@ object Prompts {
 
     private val RULES = """
         RULES
-        1. Report ONLY what is said in the NEW segment you are given (audio or transcript). Do not repeat facts already listed in CASE SO FAR. If nothing new was said, return empty arrays.
+        1. Report ONLY what is said in the NEW audio segment or NEW transcript part you are given. Do not repeat facts already listed in CASE SO FAR. If nothing new was said, return empty arrays.
         2. new_symptoms / new_negatives: short English clinical names. evidence = short verbatim quote in the original script (max 15 words).
         3. explored_question_ids: include a question only if it was asked AND answered. Use only the listed IDs for that condition.
         4. red_flags_identified: status "confirmed" when the patient/attendant clearly affirms it; "suspected" when unclear or second-hand.
            red_flags_excluded: only when the doctor explicitly asked and the answer was clearly "no".
         5. vitals: only numbers explicitly spoken (e.g. "BP 150 by 95", "SpO2 96"). Never estimate. Temperature in °F if spoken that way.
-        6. demographics: only if spoken. Omit anything not heard. Use pregnancy "not_pregnant" only if the patient explicitly says so.
+        6. demographics: give age whenever anyone states it ("४५ वर्षको", "उमेर ३०", "45 years old"). Give sex when stated or clearly implied by how people address or describe the patient (दिदी/बहिनी/आमा/madam -> female; दाइ/भाइ/बुबा/sir -> male; the patient saying "मेरो श्रीमान्" -> female, "मेरो श्रीमती" -> male). Omit if unsure. Use pregnancy "not_pregnant" only if the patient explicitly says so.
         7. allergies: give the drug or group the patient named (in Latin letters, e.g. "amoxicillin") and the reaction. Set is_intolerance=true for side effects such as nausea or acidity; false for rash, swelling, breathing difficulty.
         8. current_meds: medicines the patient already takes (Latin letters, brand or generic) with total daily mg if stated.
         9. plan_cue.detected = true when the doctor signals moving to treatment ("अब औषधि लेखिदिन्छु", "I'll write your medicines"). dictation_cue.detected = true when the doctor says specific drug names/doses as a prescription; then list each drug in dictated_items exactly as said (Latin letters).
@@ -73,12 +77,14 @@ object Prompts {
         11. follow_up_visit = true if this is clearly a follow-up of a known chronic condition (e.g. "औषधि सकियो", "रिपोर्ट देखाउन आएँ").
         12. You never diagnose beyond the listed codes, never choose medicines and never write patient instructions. The app's safety engine does that.
         13. transcript: when you receive AUDIO, give brief lines with speaker (doctor/patient/attendant/unknown) and slice_offset_ms from the start of that audio. When you receive a TRANSCRIPT, return an empty transcript array.
-        14. A machine transcript may contain recognition errors. If a word is clearly a misheard drug or symptom, use the sensible reading; if unsure, leave it out.
+        14. A machine transcript may contain recognition errors and speakers may be "unknown"; infer who is speaking from context. If a word is clearly a misheard drug or symptom, use the sensible reading; if unsure, leave it out.
+        15. next_questions: up to 3 short questions the doctor has NOT yet asked that would help most right now. Put questions that rule out dangerous causes (red flags) first, then missing checklist questions, then anything else important (duration, severity, medicines already taken, allergies). Give each in simple Nepali (Devanagari) and English, with a few words on why.
+        16. Always fill problems with the condition(s) being discussed, even if you only add explored questions or negatives for them.
     """.trimIndent()
 
     fun liveSystemPrompt(c: Catalogues, fromTranscript: Boolean = false): String {
         val input = if (fromTranscript)
-            "You receive the machine TRANSCRIPT of ONE short new segment of the conversation plus a summary of the case so far."
+            "You receive the NEW part of the machine TRANSCRIPT (since your last update), a few earlier lines for context only, and a summary of the case so far."
         else
             "You receive ONE short consecutive AUDIO segment plus a summary of the case so far."
         return """
@@ -224,7 +230,8 @@ object Prompts {
                     "condition_code" to str()
                 ), listOf("drug_stated"))),
                 "exam_findings" to arr(str()),
-                "follow_up_visit" to bool()
+                "follow_up_visit" to bool(),
+                "next_questions" to arr(obj(linkedMapOf("ne" to str(), "en" to str(), "reason" to str()), listOf("en")))
             ),
             listOf("transcript", "problems", "red_flags_identified", "red_flags_excluded")
         )
@@ -279,19 +286,41 @@ object Prompts {
     fun parseDelta(text: String): LiveDelta =
         deltaFrom(J.parse(extractJson(text)) as? J.Obj ?: throw JsonException("Response is not a JSON object"))
 
+    /**
+     * Lenient: accepts the note under "soap" (or "note"/"SOAP"), at the top level, in camelCase,
+     * or as S/O/A/P sections, and values that are strings, lists or objects.
+     */
     fun parseFinal(text: String): FinalResult {
         val o = J.parse(extractJson(text)) as? J.Obj ?: throw JsonException("Response is not a JSON object")
-        val s = o.obj("soap")
+        val s = o.obj("soap") ?: o.obj("SOAP") ?: o.obj("note") ?: o
+        fun pick(vararg keys: String): String {
+            for (k in keys) {
+                val v = s[k] ?: continue
+                val t = asText(v).trim()
+                if (t.isNotEmpty()) return t
+            }
+            return ""
+        }
         val soap = SoapNote(
-            chiefComplaint = s?.str("chief_complaint") ?: "",
-            history = s?.str("history") ?: "",
-            examSpoken = s?.str("exam_spoken") ?: "Not verbalized during consultation",
-            assessment = s?.str("assessment") ?: "",
-            planSpoken = s?.str("plan_spoken") ?: "",
-            followUp = s?.str("follow_up") ?: "",
-            adviceSpoken = s?.str("advice_spoken") ?: ""
+            chiefComplaint = pick("chief_complaint", "chiefComplaint", "cc", "complaint"),
+            history = pick("history", "history_of_present_illness", "hpi", "subjective"),
+            examSpoken = pick("exam_spoken", "examSpoken", "examination", "exam", "objective").ifEmpty { "Not verbalized during consultation" },
+            assessment = pick("assessment", "diagnosis", "impression"),
+            planSpoken = pick("plan_spoken", "planSpoken", "plan"),
+            followUp = pick("follow_up", "followUp"),
+            adviceSpoken = pick("advice_spoken", "adviceSpoken", "advice")
         )
-        return FinalResult(soap, o.obj("case_delta")?.let { deltaFrom(it) } ?: LiveDelta())
+        if (soap.isBlank()) throw JsonException("The model returned an empty note")
+        val deltaObj = o.obj("case_delta") ?: o.obj("caseDelta") ?: o
+        return FinalResult(soap, deltaFrom(deltaObj))
+    }
+
+    private fun asText(v: J): String = when (v) {
+        is J.Str -> v.v
+        is J.Num, is J.Bool -> v.toJson()
+        is J.Arr -> v.items.joinToString("; ") { asText(it) }.trim()
+        is J.Obj -> v.fields.entries.joinToString("; ") { (k, x) -> "${k.replace('_', ' ')}: ${asText(x)}" }
+        is J.Null -> ""
     }
 
     fun deltaFrom(o: J.Obj): LiveDelta {
@@ -343,7 +372,8 @@ object Prompts {
             allergies = o.objs("allergies").map { AllergyInput(it.strOr("stated", ""), it.str("reaction"), it.bool("is_intolerance") ?: false) },
             comorbidities = o.strs("comorbidities"),
             currentMeds = o.objs("current_meds").map { MedInput(it.strOr("stated", ""), it.dbl("daily_dose_mg")) },
-            examFindings = o.strs("exam_findings")
+            examFindings = o.strs("exam_findings"),
+            nextQuestions = o.objs("next_questions").map { AiQuestion(it.strOr("ne", ""), it.strOr("en", ""), it.strOr("reason", "")) }
         )
     }
 }

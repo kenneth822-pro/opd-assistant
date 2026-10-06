@@ -21,40 +21,67 @@ class SettingsStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("opd_settings", Context.MODE_PRIVATE)
 
-    var geminiKey: String
-        get() = (prefs.getString("gemini_key_enc", null) ?: prefs.getString("api_key_enc", null))?.let { decrypt(it) } ?: ""
-        set(value) = prefs.edit().putString("gemini_key_enc", encrypt(value.trim())).remove("api_key_enc").apply()
-
-    var openRouterKey: String
-        get() = prefs.getString("openrouter_key_enc", null)?.let { decrypt(it) } ?: ""
-        set(value) = prefs.edit().putString("openrouter_key_enc", encrypt(value.trim())).apply()
-
-    fun keyFor(p: Provider): String = when (p) {
-        Provider.GEMINI -> geminiKey
-        Provider.OPENROUTER -> openRouterKey
+    /** Storage names; Gemini and OpenRouter keep the names used by earlier builds. */
+    private fun keyName(p: Provider) = when (p) {
+        Provider.GEMINI -> "gemini_key_enc"
+        Provider.OPENROUTER -> "openrouter_key_enc"
+        else -> "key_${p.name.lowercase()}_enc"
     }
 
-    /** Model that listens to the audio (must accept audio input). */
+    fun keyFor(p: Provider): String {
+        val stored = prefs.getString(keyName(p), null)
+            ?: if (p == Provider.GEMINI) prefs.getString("api_key_enc", null) else null
+        return stored?.let { decrypt(it) } ?: ""
+    }
+
+    fun setKey(p: Provider, value: String) {
+        val e = prefs.edit()
+        if (value.isBlank()) e.remove(keyName(p)) else e.putString(keyName(p), encrypt(value.trim()))
+        if (p == Provider.GEMINI) e.remove("api_key_enc")
+        e.apply()
+    }
+
+    fun hasKey(p: Provider): Boolean = keyFor(p).isNotBlank()
+
+    /** Server address for a custom OpenAI-compatible server (e.g. http://192.168.1.10:1234/v1). */
+    var customBaseUrl: String
+        get() = prefs.getString("custom_base_url", "") ?: ""
+        set(value) = prefs.edit().putString("custom_base_url", value.trim()).apply()
+
+    fun baseUrlFor(p: Provider): String = when (p) {
+        Provider.CUSTOM -> customBaseUrl
+        else -> p.defaultBaseUrl ?: ""
+    }
+
+    /** Model that listens to the audio (must accept audio, or be a speech-to-text model). */
     var speechModel: ModelInfo?
         get() = readModel("speech_model")
         set(value) = writeModel("speech_model", value)
 
-    /** Model that turns transcripts into structured notes. Null = the speech model does everything in one step. */
+    /** Model that turns transcripts into structured notes. Null = the speech model does this too. */
     var analysisModel: ModelInfo?
         get() = readModel("analysis_model")
         set(value) = writeModel("analysis_model", value)
 
-    var geminiModels: List<ModelInfo>
-        get() = ModelInfo.listFromJson(prefs.getString("gemini_models", null))
-        set(value) = prefs.edit().putString("gemini_models", ModelInfo.listToJson(value)).apply()
+    /** Used automatically when a main model is busy (HTTP 503 / 429) or retired. */
+    var backupModel: ModelInfo?
+        get() = readModel("backup_model")
+        set(value) = writeModel("backup_model", value)
 
-    var openRouterModels: List<ModelInfo>
-        get() = ModelInfo.listFromJson(prefs.getString("openrouter_models", null))
-        set(value) = prefs.edit().putString("openrouter_models", ModelInfo.listToJson(value)).apply()
+    private fun modelsName(p: Provider) = when (p) {
+        Provider.GEMINI -> "gemini_models"
+        Provider.OPENROUTER -> "openrouter_models"
+        else -> "models_${p.name.lowercase()}"
+    }
+
+    fun models(p: Provider): List<ModelInfo> = ModelInfo.listFromJson(prefs.getString(modelsName(p), null))
+
+    fun setModels(p: Provider, list: List<ModelInfo>) =
+        prefs.edit().putString(modelsName(p), ModelInfo.listToJson(list)).apply()
 
     var segmentSeconds: Int
-        get() = prefs.getInt("segment_seconds", 20).coerceIn(10, 60)
-        set(value) = prefs.edit().putInt("segment_seconds", value.coerceIn(10, 60)).apply()
+        get() = prefs.getInt("segment_seconds", 15).coerceIn(8, 60)
+        set(value) = prefs.edit().putInt("segment_seconds", value.coerceIn(8, 60)).apply()
 
     var disclaimerAccepted: Boolean
         get() = prefs.getBoolean("disclaimer_v1", false)

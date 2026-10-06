@@ -62,7 +62,9 @@ data class ConditionDef(
     val mandatoryRedFlags: List<String>,
     val score: ScoredCriteria?,
     val linkedRegimens: List<String>,
-    val linkedInvestigations: List<String>
+    val linkedInvestigations: List<String>,
+    /** Nepali/English words that suggest this condition in a transcript (on-device hints). */
+    val keywords: List<String> = emptyList()
 ) {
     fun allQuestionIds(): Set<String> = visitTypes.values.flatMap { v -> v.questions.map { it.id } }.toSet()
     fun checklist(visitType: String): VisitChecklist? = visitTypes[visitType] ?: visitTypes["INITIAL"]
@@ -77,7 +79,8 @@ data class RedFlagDef(
     val sessionLevel: SessionLevel,
     val disposition: Disposition,
     val derivationRule: Rule?,
-    val redirectTo: String?
+    val redirectTo: String?,
+    val keywords: List<String> = emptyList()
 )
 
 data class DrugDef(
@@ -231,7 +234,8 @@ class Catalogues(
                     mandatoryRedFlags = c.strs("mandatory_red_flags"),
                     score = score,
                     linkedRegimens = c.strs("linked_regimens"),
-                    linkedInvestigations = c.strs("linked_investigations")
+                    linkedInvestigations = c.strs("linked_investigations"),
+                    keywords = c.strs("keywords").map { it.lowercase() }
                 )
             }
 
@@ -247,7 +251,8 @@ class Catalogues(
                     sessionLevel = SessionLevel.valueOf(f.strOr("session_level", "INFO")),
                     disposition = Disposition.valueOf(f.strOr("disposition", "OPD_TREAT")),
                     derivationRule = Rule.from(f.obj("derivation_rule")),
-                    redirectTo = f.str("redirect_to_condition")
+                    redirectTo = f.str("redirect_to_condition"),
+                    keywords = f.strs("keywords").map { it.lowercase() }
                 )
             }
 
@@ -385,12 +390,14 @@ object CatalogueIntegrity {
                 else if (reg.conditionCode != cond.code) errors += "${cond.code}: regimen $r belongs to ${reg.conditionCode}"
             }
             for (inv in cond.linkedInvestigations) if (c.investigations[inv] == null) errors += "${cond.code}: missing investigation $inv"
+            if (cond.keywords.isEmpty()) errors += "${cond.code}: needs keywords for on-device hints"
         }
         for (f in c.redFlags.values) {
             ruleErrors("flag ${f.id}", f.derivationRule)
             if (f.kind == FlagKind.REDIRECT && (f.redirectTo == null || c.conditions[f.redirectTo] == null))
                 errors += "flag ${f.id}: redirect target '${f.redirectTo}' missing"
             if (f.kind != FlagKind.REDIRECT && f.redirectTo != null) errors += "flag ${f.id}: only REDIRECT flags may redirect"
+            if (f.derivationRule == null && f.keywords.isEmpty()) errors += "flag ${f.id}: conversational flag needs keywords"
         }
         for (r in c.regimens.values) {
             if (c.conditions[r.conditionCode] == null) errors += "regimen ${r.id}: unknown condition ${r.conditionCode}"

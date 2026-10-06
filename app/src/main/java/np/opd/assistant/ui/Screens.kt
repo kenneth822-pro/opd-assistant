@@ -59,6 +59,7 @@ import np.opd.engine.Phase
 import np.opd.engine.Pregnancy
 import np.opd.engine.Problem
 import np.opd.engine.RegimenDef
+import np.opd.engine.SessionLevel
 import np.opd.engine.Severity
 import np.opd.engine.Sig
 import np.opd.engine.TranscriptLine
@@ -135,6 +136,17 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
                 vm.catalogueProblems.take(10).forEach { Text("• $it") }
             }
         }
+        st.resumable?.let { r ->
+            SectionCard("Unfinished consultation", container = Palette.urgentBg) {
+                val at = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(r.savedAtMs))
+                Text("Saved at $at: ${r.case.transcript.size} transcript line(s), ${r.case.problems.size} problem(s).")
+                Muted("The app was closed or stopped during a consultation. Open it to see what was captured and to write the note. The audio is not resumed.")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { vm.resumeSavedConsultation() }) { Text("Open it") }
+                    TextButton(onClick = { vm.discardSavedConsultation() }) { Text("Discard") }
+                }
+            }
+        }
         Button(
             onClick = { vm.newConsultation() },
             enabled = ready,
@@ -148,6 +160,12 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
         HorizontalDivider()
         vm.catalogues?.let { c ->
             Muted("Built-in clinical catalogue v${c.version}: ${c.conditions.size} common conditions with question checklists, red flags and keywords, ${c.regimens.size} regimens, ${c.drugs.size} drugs, ${c.redFlags.size} red flags. Works on the phone without the AI. All content is UNVERIFIED prototype data.")
+            val v = c.verification()
+            Muted(
+                "Checked against a guideline source: ${v.conditions.sourceMatched + v.conditions.clinicianVerified} of ${v.conditions.total} conditions, " +
+                    "${v.regimens.sourceMatched + v.regimens.clinicianVerified} of ${v.regimens.total} regimens. " +
+                    "Target documents (e.g. the Nepal Standard Treatment Protocol, BHS package 2078): ${v.documentsRetrieved} of ${v.documentsListed} retrieved."
+            )
         }
     }
 }
@@ -252,6 +270,13 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
             SectionCard("Please wait") { Text(it); LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
         }
         Banner(s.sessionAlerts, s.sessionLevel)
+        Banner(s.scopeAlerts, SessionLevel.URGENT)
+        if (st.soap == null && st.busy == null && s.transcript.isNotEmpty()) {
+            SectionCard("The note has not been written yet", container = Palette.urgentBg) {
+                Muted("This consultation was recovered after the app closed. The transcript and findings are below; the note can be written from them now.")
+                Button(onClick = { vm.retryFinal() }) { Text("Write the note now") }
+            }
+        }
         if (st.finalFailed) {
             SectionCard("The AI note could not be written", container = Palette.urgentBg) {
                 st.errors.takeLast(2).forEach { Muted(it) }

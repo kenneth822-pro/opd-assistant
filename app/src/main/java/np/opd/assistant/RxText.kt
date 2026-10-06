@@ -23,9 +23,10 @@ object RxText {
         sb.appendLine("Allergies: " + if (allergyText.isEmpty()) "none recorded" else allergyText.joinToString("; "))
         sb.appendLine()
 
-        if (s.sessionAlerts.isNotEmpty()) {
+        val alerts = s.sessionAlerts + s.scopeAlerts
+        if (alerts.isNotEmpty()) {
             sb.appendLine("ALERTS:")
-            s.sessionAlerts.forEach { sb.appendLine("  ! $it") }
+            alerts.forEach { sb.appendLine("  ! $it") }
             sb.appendLine()
         }
 

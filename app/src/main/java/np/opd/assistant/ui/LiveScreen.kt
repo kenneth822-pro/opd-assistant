@@ -1,17 +1,21 @@
 package np.opd.assistant.ui
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -22,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,12 +34,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import np.opd.assistant.Mode
 import np.opd.assistant.SegState
 import np.opd.assistant.SessionViewModel
@@ -43,10 +50,12 @@ import np.opd.engine.Catalogues
 import np.opd.engine.DoctorAction
 import np.opd.engine.FlagStatus
 import np.opd.engine.Gender
+import np.opd.engine.OpdSheet
 import np.opd.engine.Phase
 import np.opd.engine.Pregnancy
 import np.opd.engine.Problem
 import np.opd.engine.QuestionDef
+import np.opd.engine.SessionLevel
 import np.opd.speech.SpeechEngine
 
 /* ============================== Live consultation ============================== */
@@ -65,8 +74,42 @@ internal fun RecordingScreen(st: UiState, vm: SessionViewModel) {
     if (showVitals) VitalsDialog(st.case.vitals, onSave = { vm.act(DoctorAction.SetVitals(it)); showVitals = false }, onDismiss = { showVitals = false })
     if (showDemo) DemographicsDialog(st.case.demographics, onSave = { a, g -> vm.act(DoctorAction.SetDemographics(a, g)); showDemo = false }, onDismiss = { showDemo = false })
 
+    var showLayer by remember { mutableStateOf(false) }
+    var confirmEnd by remember { mutableStateOf(false) }
+    val live = st.mode == Mode.LIVE
+    val context = LocalContext.current
+    // The provisional diagnosis and the OPD sheet are views of the live case: they stay current while open.
+    val sheet = remember(st.case, st.diagnosis.result) { OpdSheet.build(st.case, st.diagnosis.result, cat) }
+    val verification = remember(cat) { cat.verification() }
+    val shareSheet = {
+        val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, sheet.toText(cat)) }
+        context.startActivity(Intent.createChooser(send, "Share OPD sheet"))
+    }
+    val closeLayer = { showLayer = false; vm.acknowledgeDiagnosis() }
+    BackHandler(enabled = showLayer) { closeLayer() }
+    if (confirmEnd) AlertDialog(
+        onDismissRequest = { confirmEnd = false },
+        title = { Text("End the consultation?") },
+        text = { Text("Recording stops and the note is written from what was heard. This recording cannot be resumed.") },
+        confirmButton = { TextButton(onClick = { confirmEnd = false; vm.endConsult() }) { Text("End") } },
+        dismissButton = { TextButton(onClick = { confirmEnd = false }) { Text("Keep recording") } }
+    )
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val wide = maxWidth >= WideBreakpoint
+    // On a wide screen the panel is always visible, so changes count as seen once they have settled for a while.
+    LaunchedEffect(st.diagnosis.result, wide) {
+        if (wide && st.diagnosis.hasUnseenChange) { delay(20_000); vm.acknowledgeDiagnosis() }
+    }
     Page(
         title = if (st.mode == Mode.LIVE) "Live assist" else "Scribe",
+        pinned = if (live) { { DiagnosisStrip(st.diagnosis, onOpen = { showLayer = true }) } } else null,
+        side = if (live) {
+            {
+                SidePanelTitle()
+                DiagnosisPanel(st.diagnosis, sheet, verification, onAdd = { vm.act(DoctorAction.AddProblem(it)) }, onShare = shareSheet)
+            }
+        } else null,
         bottomBar = {
             if (st.busy == null) Surface(tonalElevation = 3.dp) {
                 Row(
@@ -79,7 +122,7 @@ internal fun RecordingScreen(st: UiState, vm: SessionViewModel) {
                         Text("💡 Suggest")
                     }
                     Button(
-                        onClick = { vm.endConsult() },
+                        onClick = { confirmEnd = true },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = Palette.emergencyFg)
                     ) { Text("■ End") }
@@ -95,6 +138,13 @@ internal fun RecordingScreen(st: UiState, vm: SessionViewModel) {
             }
         }
         Banner(st.case.sessionAlerts, st.case.sessionLevel)
+        Banner(st.case.scopeAlerts, SessionLevel.URGENT)
+        st.micWarning?.let { w ->
+            SectionCard("Microphone", container = Palette.emergencyBg) {
+                Text(w, color = Palette.emergencyFg, fontWeight = FontWeight.SemiBold)
+                Button(onClick = { vm.restartMicrophone() }) { Text("Restart microphone") }
+            }
+        }
         st.message?.let { Text(it, color = Palette.urgentFg) }
         PatientStrip(st, cat, vm, onEdit = { showDemo = true }, onVitals = { showVitals = true })
 
@@ -135,6 +185,10 @@ internal fun RecordingScreen(st: UiState, vm: SessionViewModel) {
             SectionCard("Recent problems", container = Palette.greyBg) { st.errors.takeLast(3).forEach { Muted(it) } }
         }
         Spacer(Modifier.height(90.dp))
+    }
+    if (live) BottomLayer(visible = showLayer, onDismiss = closeLayer, title = "Provisional diagnosis & OPD sheet") {
+        DiagnosisPanel(st.diagnosis, sheet, verification, onAdd = { vm.act(DoctorAction.AddProblem(it)) }, onShare = shareSheet)
+    }
     }
 }
 

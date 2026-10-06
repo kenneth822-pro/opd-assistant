@@ -16,6 +16,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -30,9 +33,12 @@ import np.opd.assistant.ai.ModelInfo
 import np.opd.assistant.ai.OpenAiCompatClient
 import np.opd.assistant.ai.Provider
 import np.opd.assistant.audio.WavSegmentRecorder
+import np.opd.engine.CaseJson
 import np.opd.engine.CaseState
 import np.opd.engine.CatalogueIntegrity
 import np.opd.engine.Catalogues
+import np.opd.engine.DiagnosisView
+import np.opd.engine.Differential
 import np.opd.engine.DoctorAction
 import np.opd.engine.Gender
 import np.opd.engine.J
@@ -41,6 +47,7 @@ import np.opd.engine.LocalAssist
 import np.opd.engine.Notes
 import np.opd.engine.Prompts
 import np.opd.engine.Reducer
+import np.opd.engine.SavedSession
 import np.opd.engine.TranscriptLine
 import np.opd.speech.AsrException
 import np.opd.speech.InstallState
@@ -107,7 +114,13 @@ data class UiState(
     val speechEngine: SpeechEngine = SpeechEngine.AUTO,
     val localAsr: LocalAsrStatus = LocalAsrStatus.NotInstalled,
     val localInstall: InstallState = InstallState.NotInstalled,
-    val localAsrTest: String? = null
+    val localAsrTest: String? = null,
+    /** Live provisional diagnosis (recomputed whenever the case or the keyword hints change) and what changed. */
+    val diagnosis: DiagnosisView = DiagnosisView(),
+    /** The microphone is open but delivering nothing (call, other app, app in background), or has failed. */
+    val micWarning: String? = null,
+    /** An unfinished consultation found on disk at start-up (the app was closed or killed mid-consultation). */
+    val resumable: SavedSession? = null
 ) {
     val notesModel: ModelInfo? get() = analysisModel ?: speechModel
     val pendingSegments: Int get() = segments.count { it.state == SegState.QUEUED || it.state == SegState.TRANSCRIBING }
@@ -174,6 +187,86 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         ui = _ui.asStateFlow()
         onDeviceAsr.statusFlow?.let { f -> viewModelScope.launch { f.collect { s -> _ui.update { it.copy(localAsr = s) } } } }
         onDeviceAsr.installFlow?.let { f -> viewModelScope.launch { f.collect { s -> _ui.update { it.copy(localInstall = s) } } } }
+
+        // Provisional diagnosis: recomputed from the case + keyword hints whenever either changes. Pure and instant.
+        viewModelScope.launch {
+            _ui.map { it.case to it.hints }.distinctUntilChanged().collect { (case, hints) ->
+                _ui.update { st -> if (st.case === case && st.hints === hints) diagnose(st) else st }
+            }
+        }
+
+        // Crash safety: keep the facts of the consultation on disk (app-private, same lifetime as the audio), so a call,
+        // a crash or Android reclaiming the app does not lose what was captured. collectLatest = save after a quiet 1.5 s.
+        viewModelScope.launch {
+            _ui.map { Triple(it.case, it.soap, it.mode) }.distinctUntilChanged().collectLatest {
+                delay(1500)
+                val st = _ui.value
+                if (st.hasSession && (st.case.transcript.isNotEmpty() || st.case.problems.isNotEmpty())) withContext(Dispatchers.IO) { saveSession(st) }
+            }
+        }
+        viewModelScope.launch(Dispatchers.IO) { loadSavedSession() }
+    }
+
+    /** Recomputes the provisional diagnosis and what changed since the doctor last looked. */
+    private fun diagnose(st: UiState): UiState {
+        val cat = catalogues ?: return st
+        return st.copy(diagnosis = Differential.track(st.diagnosis, Differential.compute(st.case, st.hints, cat), st.elapsedSec))
+    }
+
+    /** The doctor has seen the current diagnosis: "new" / "rose" markers reset until something changes again. */
+    fun acknowledgeDiagnosis() = _ui.update { it.copy(diagnosis = Differential.acknowledge(it.diagnosis)) }
+
+    /* ---------------- unfinished consultation (crash safety) ---------------- */
+
+    private fun savedFile() = File(getApplication<Application>().filesDir, "sessions/consultation.json")
+
+    private fun saveSession(st: UiState) {
+        try {
+            val f = savedFile()
+            f.parentFile?.mkdirs()
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(
+                CaseJson.encode(SavedSession(st.case, st.mode.name, st.elapsedSec, st.heard, st.doneTips, st.soap, System.currentTimeMillis())),
+                Charsets.UTF_8
+            )
+            if (!tmp.renameTo(f)) { tmp.copyTo(f, overwrite = true); tmp.delete() } // atomic where possible: a crash mid-write never leaves half a file
+        } catch (e: Exception) {
+            addError("Could not save the consultation: ${e.message}")
+        }
+    }
+
+    private fun loadSavedSession() {
+        val cat = catalogues ?: return
+        val f = savedFile()
+        if (!f.isFile) return
+        val saved = try { CaseJson.decode(f.readText(Charsets.UTF_8), cat) } catch (e: Exception) { f.delete(); return }
+        _ui.update { if (it.hasSession || it.recording) it else it.copy(resumable = saved) }
+    }
+
+    /** Opens the unfinished consultation on the review screen. The audio is not resumed; the transcript and facts are. */
+    fun resumeSavedConsultation() {
+        val saved = _ui.value.resumable ?: return
+        val cat = catalogues ?: return
+        val hints = LocalAssist.analyze(saved.case.transcript, cat)
+        _ui.value = withSettings(
+            UiState(
+                screen = Screen.REVIEW,
+                mode = Mode.values().firstOrNull { it.name == saved.mode } ?: Mode.LIVE,
+                case = saved.case,
+                elapsedSec = saved.elapsedSec,
+                heard = saved.heard,
+                doneTips = saved.doneTips,
+                soap = saved.soap,
+                finalFailed = saved.soap?.localDraft == true,
+                hints = hints,
+                hasSession = true
+            )
+        )
+    }
+
+    fun discardSavedConsultation() {
+        savedFile().delete()
+        _ui.update { it.copy(resumable = null) }
     }
 
     private fun key(p: Provider): String = keyCache.getOrPut(p) { settings.keyFor(p) }
@@ -323,6 +416,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         if (_ui.value.recording) return
         File(getApplication<Application>().filesDir, "sessions").deleteRecursively()
         synchronized(segments) { segments.clear() }
+        _ui.update { it.copy(resumable = null) } // the saved consultation lives with the audio and goes with it
         showMessage("All recorded audio deleted from this phone.")
     }
 
@@ -523,7 +617,8 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(
                         elapsedSec = if (it.paused) it.elapsedSec else it.elapsedSec + 1,
                         level = r?.level ?: 0f,
-                        currentSegmentSec = ((r?.currentSegmentMs ?: 0L) / 1000).toInt()
+                        currentSegmentSec = ((r?.currentSegmentMs ?: 0L) / 1000).toInt(),
+                        micWarning = if (it.paused) null else r?.micProblem()
                     )
                 }
             }
@@ -578,6 +673,21 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) { recorder?.stop() } // emits the last part as a segment
             if (_ui.value.pendingSegments == 0) requestAnalysis(true)
+        }
+    }
+
+    /** Stops and reopens the microphone, keeping everything captured so far. */
+    fun restartMicrophone() {
+        val st = _ui.value
+        if (!st.recording || st.busy != null) return
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { recorder?.stop() }
+            try {
+                recorder?.start()
+                _ui.update { it.copy(paused = false, micWarning = null) }
+            } catch (e: Exception) {
+                showMessage("Could not restart the microphone: ${e.message}")
+            }
         }
     }
 

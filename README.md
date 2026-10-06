@@ -46,6 +46,17 @@ The app also adapts to models with restrictions: if a model refuses system ("dev
 
 Tap **Test selected models** to check all three. Keys are encrypted on the phone with the Android Keystore; requests go directly from the phone to the provider.
 
+### On-device Nepali speech (optional, no key, works offline)
+
+Speech can also be recognised **on the phone** instead of by a cloud model: no API key, no rate limit, audio never
+leaves the phone. Settings → **Speech recognition** → choose *On-device Nepali*, *Automatic* (on-device first, cloud only
+as a fallback) or *Cloud* (the previous behaviour, and what *Automatic* does until a model is installed). The notes
+model above is still needed: it reads the transcript text. This needs the APK built **with** the on-device engine
+(the **`opd-assistant-local-asr-build-N`** artifact of the *Build APK* run, or `-PenableNativeAsr=true`) and a Whisper model
+file you convert and import yourself. **Read `docs/ON_DEVICE_ASR.md` first**: it states exactly what has and has not been
+verified (not yet run on a phone; no NPU path; the Nepali model's source and licence are unverified and reported as
+non-commercial).
+
 ## 3. Run a test consultation
 
 1. **New consultation** → **Live assist** (help while you talk) or **Scribe only** (fewer requests).
@@ -102,7 +113,11 @@ Key safety rules (all enforced in code and covered by tests):
 |---|---|
 | `engine/src/main/resources/catalogues/v1/` | **All clinical content** (conditions, red flags, regimens, formulary, interactions). Review these JSON files clinically. |
 | `engine/src/main/kotlin/` | Safety engine: reducer, safety checks, Nepali instruction templates, prompt + schema builder. No dependencies. |
-| `engine/src/test/kotlin/` | 53 tests incl. catalogue integrity, keyword hints with Nepali negation, and a randomized "AI can never loosen safety" check. |
+| `engine/src/test/kotlin/` | 120 tests incl. catalogue integrity, keyword hints with Nepali negation, the adult-only scope guard, the live differential, provenance rules, crash-safe state, and a randomized "AI can never loosen safety" check. |
+| `speech/` | Pure-Kotlin on-device speech layer: routing (on-device / cloud / fallback), model installer, serial engine wrapper, Nepali-safe output filter, model manifest. 74 tests. |
+| `asr-native/` | Optional Android library: whisper.cpp (ARM64 CPU) + JNI. Built only with `-PenableNativeAsr=true`. |
+| `tools/asr/` | Model conversion, accuracy validation (WER) and the JNI self-test. |
+| `docs/ON_DEVICE_ASR.md` | On-device speech: architecture, verification status, model source/licence, conversion, device test procedure. |
 | `app/` | Android app (Kotlin + Jetpack Compose). |
 | `.github/workflows/build.yml` | Runs the tests, builds the APK, publishes it as a Release. |
 | `keystore/testing.jks` | **Test-only** signing key so updates install over each other. Never use for a published app. |
@@ -111,6 +126,7 @@ Key safety rules (all enforced in code and covered by tests):
 
 - Recording only works while the app is open on screen (no background recording service yet).
 - No patient records are saved; starting a new consultation deletes the previous audio.
+- On-device speech is **not yet verified on a phone**: it compiles and its logic and JNI bridge are tested, but real inference, Nepali accuracy, speed and battery still have to be measured on your device (procedure in `docs/ON_DEVICE_ASR.md`). It runs on the CPU; there is no Snapdragon NPU path yet.
 - No PDF / thermal printing yet (Share as text only).
 - Speaker labels come from the AI and can be wrong (Whisper gives none; the notes model infers them).
 - Free model tiers have daily limits; a 10-minute live consultation uses roughly 40-80 requests.
@@ -120,8 +136,10 @@ Key safety rules (all enforced in code and covered by tests):
 ## 7. For developers
 
 ```bash
-./gradlew :engine:test          # run the safety engine tests
-./gradlew :app:assembleDebug    # build the APK (needs Android SDK)
+./gradlew :engine:test :speech:test   # run the safety engine and speech-layer tests (no Android SDK needed)
+./gradlew :app:assembleDebug          # build the APK (needs Android SDK)
+./gradlew :app:assembleDebug -PenableNativeAsr=true   # APK with the on-device speech engine (needs NDK + CMake)
+tools/asr/bridge_selftest.sh          # check the native bridge on this computer
 ```
 
 Open the folder in Android Studio to work on the app. The engine can be edited in any IDE.

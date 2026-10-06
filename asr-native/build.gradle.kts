@@ -19,6 +19,7 @@ android {
 
     defaultConfig {
         minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             // arm64 only: the first target is the OnePlus 15 (Snapdragon 8 Elite Gen 5).
             abiFilters += "arm64-v8a"
@@ -48,4 +49,8 @@ android {
 
 dependencies {
     api(project(":speech"))
+
+    // Device smoke test only (src/androidTest); nothing here ships in the app.
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

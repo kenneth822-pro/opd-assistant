@@ -1,0 +1,284 @@
+{
+  "version": "1.0.0",
+  "note": "PROTOTYPE CONTENT - clinically UNVERIFIED. Must be reviewed by a clinician against current MoHP Nepal guidance before any real-patient use.",
+  "red_flags": [
+    {
+      "id": "rf_confusion",
+      "kind": "RED_FLAG",
+      "label": "New confusion / altered mental state",
+      "label_ne": "भर्खरै होस ठेगान नरहनु / अलमलिनु",
+      "cue": "Disorientation, drowsiness, not answering sensibly, attendant says patient is confused",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_rr_ge30",
+      "kind": "SCORE_COMPONENT",
+      "label": "Respiratory rate 30 or more per minute",
+      "label_ne": "सास प्रति मिनेट ३० वा बढी",
+      "cue": "Measured respiratory rate only",
+      "session_level": "URGENT",
+      "disposition": "STAT_INVESTIGATE",
+      "derivation_rule": { "field": "rr", "op": ">=", "value": 30 }
+    },
+    {
+      "id": "rf_hypotension",
+      "kind": "SCORE_COMPONENT",
+      "label": "Low blood pressure (SBP < 90 or DBP <= 60)",
+      "label_ne": "रक्तचाप कम",
+      "cue": "Measured blood pressure only",
+      "session_level": "URGENT",
+      "disposition": "STAT_INVESTIGATE",
+      "derivation_rule": {
+        "composite_op": "OR",
+        "rules": [
+          { "field": "bp_systolic", "op": "<", "value": 90 },
+          { "field": "bp_diastolic", "op": "<=", "value": 60 }
+        ]
+      }
+    },
+    {
+      "id": "rf_spo2_lt88",
+      "kind": "RED_FLAG",
+      "label": "Oxygen saturation below 88%",
+      "label_ne": "अक्सिजन ८८% भन्दा कम",
+      "cue": "Measured SpO2 only",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER",
+      "derivation_rule": { "field": "spo2", "op": "<", "value": 88 }
+    },
+    {
+      "id": "rf_cp_rest_pain_20m",
+      "kind": "RED_FLAG",
+      "label": "Chest pain at rest lasting more than 20 minutes",
+      "label_ne": "आराम गर्दा पनि २० मिनेटभन्दा बढी छाती दुख्ने",
+      "cue": "Pain at rest, ongoing, not settling, 'आराम गर्दा पनि दुखिरहन्छ'",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_cp_syncope",
+      "kind": "RED_FLAG",
+      "label": "Fainting with chest pain",
+      "label_ne": "छाती दुख्दा बेहोस हुने",
+      "cue": "Fainted, blacked out, 'रिँगटा लागेर ढलें'",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_cp_diaphoresis",
+      "kind": "RED_FLAG",
+      "label": "Cold sweating with chest pain",
+      "label_ne": "छाती दुख्दा चिसो पसिना आउने",
+      "cue": "'चिटचिट पसिना आउँछ' with chest pain",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_gi_melena",
+      "kind": "RED_FLAG",
+      "label": "Black tarry stool (melena)",
+      "label_ne": "अलकत्रा जस्तो कालो दिसा",
+      "cue": "'कालो दिसा', 'अलकत्रा जस्तो'. Note: iron tablets also darken stool",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_gi_hematemesis",
+      "kind": "RED_FLAG",
+      "label": "Vomiting blood",
+      "label_ne": "रगत बान्ता",
+      "cue": "'रगत बान्ता', coffee-ground vomit",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_gi_dysphagia",
+      "kind": "RED_FLAG",
+      "label": "Progressive difficulty swallowing",
+      "label_ne": "निल्न गाह्रो हुँदै जाने",
+      "cue": "Food sticking, worsening over weeks",
+      "session_level": "URGENT",
+      "disposition": "REFERRAL"
+    },
+    {
+      "id": "rf_gi_weight_loss",
+      "kind": "RED_FLAG",
+      "label": "Unintentional weight loss",
+      "label_ne": "कारण बिना तौल घट्ने",
+      "cue": "'दुब्लाएँ', clothes loose, appetite gone",
+      "session_level": "URGENT",
+      "disposition": "REFERRAL"
+    },
+    {
+      "id": "rf_gi_blood_in_stool",
+      "kind": "REDIRECT",
+      "label": "Blood or mucus in loose stool",
+      "label_ne": "दिसामा रगत वा आउँ",
+      "cue": "'रगत मिसिएको दिसा', 'आउँ'",
+      "session_level": "INFO",
+      "disposition": "OPD_TREAT",
+      "redirect_to_condition": "COND_DYSENTERY"
+    },
+    {
+      "id": "rf_htn_severe_bp",
+      "kind": "ALERT",
+      "label": "Severe BP (180/120 or higher) - recheck after 15 min rest",
+      "label_ne": "धेरै उच्च रक्तचाप",
+      "cue": "Measured BP only",
+      "session_level": "URGENT",
+      "disposition": "OPD_TREAT",
+      "derivation_rule": {
+        "composite_op": "OR",
+        "rules": [
+          { "field": "bp_systolic", "op": ">=", "value": 180 },
+          { "field": "bp_diastolic", "op": ">=", "value": 120 }
+        ]
+      }
+    },
+    {
+      "id": "rf_htn_emergency",
+      "kind": "RED_FLAG",
+      "label": "High BP with organ symptoms (chest pain, weakness, vision loss, breathlessness)",
+      "label_ne": "उच्च रक्तचापसँगै छाती दुख्ने, कमजोरी, आँखा नदेख्ने",
+      "cue": "Severe BP plus chest pain, one-sided weakness, sudden vision loss, severe breathlessness",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_dm_dka",
+      "kind": "RED_FLAG",
+      "label": "Possible DKA/HHS (vomiting, deep breathing, drowsy, very high sugar)",
+      "label_ne": "सुगर धेरै बढेर बान्ता, निदाउने",
+      "cue": "Diabetic with vomiting, abdominal pain, drowsiness, deep fast breathing",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_dm_foot_infection",
+      "kind": "RED_FLAG",
+      "label": "Infected or blackened foot ulcer",
+      "label_ne": "खुट्टाको घाउ पाकेको / कालो भएको",
+      "cue": "Foul-smelling foot wound, black toes, fever",
+      "session_level": "URGENT",
+      "disposition": "REFERRAL"
+    },
+    {
+      "id": "rf_age_severe_dehydration",
+      "kind": "RED_FLAG",
+      "label": "Severe dehydration (lethargic, sunken eyes, very slow skin pinch)",
+      "label_ne": "शरीरमा पानीको धेरै कमी",
+      "cue": "Very weak, drowsy, not passing urine, sunken eyes",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_age_unable_to_drink",
+      "kind": "RED_FLAG",
+      "label": "Unable to drink or keep fluids down",
+      "label_ne": "पानी/जीवनजल पिउन नसक्ने",
+      "cue": "Vomits everything, cannot take ORS",
+      "session_level": "URGENT",
+      "disposition": "STAT_INVESTIGATE"
+    },
+    {
+      "id": "rf_acute_abdomen",
+      "kind": "RED_FLAG",
+      "label": "Severe abdominal pain with rigid or guarded abdomen",
+      "label_ne": "पेट कडा भएर असह्य दुख्ने",
+      "cue": "Severe constant pain, doctor says abdomen is rigid/guarding",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_asth_cannot_complete_sentences",
+      "kind": "RED_FLAG",
+      "label": "Too breathless to finish sentences",
+      "label_ne": "सास फेर्न गाह्रो भएर वाक्य पूरा बोल्न नसक्ने",
+      "cue": "Speaking in single words",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_asth_silent_chest",
+      "kind": "RED_FLAG",
+      "label": "Exhausted, drowsy or silent chest",
+      "label_ne": "थकित, निदाउने",
+      "cue": "Doctor notes silent chest or exhaustion",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_ar_unilateral_bleed",
+      "kind": "RED_FLAG",
+      "label": "One-sided blocked nose with repeated bleeding",
+      "label_ne": "एकातिर मात्र नाक बन्द र पटक पटक रगत",
+      "cue": "Unilateral obstruction, recurrent nosebleed",
+      "session_level": "URGENT",
+      "disposition": "REFERRAL"
+    },
+    {
+      "id": "rf_lbp_bladder_bowel",
+      "kind": "RED_FLAG",
+      "label": "New bladder or bowel control problem with back pain",
+      "label_ne": "ढाड दुखाइसँगै पिसाब/दिसा रोक्न नसक्ने",
+      "cue": "Cannot pass urine, incontinence",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_lbp_saddle_numbness",
+      "kind": "RED_FLAG",
+      "label": "Numbness around buttocks/groin (saddle area)",
+      "label_ne": "चाक/गुप्तांग वरिपरि झमझम",
+      "cue": "Saddle numbness",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_lbp_fever_spine",
+      "kind": "RED_FLAG",
+      "label": "Back pain with fever or severe spine tenderness",
+      "label_ne": "ढाड दुखाइसँगै ज्वरो",
+      "cue": "Fever, night pain, point tenderness",
+      "session_level": "URGENT",
+      "disposition": "STAT_INVESTIGATE"
+    },
+    {
+      "id": "rf_meningism",
+      "kind": "RED_FLAG",
+      "label": "Fever with stiff neck or light sensitivity",
+      "label_ne": "ज्वरोसँगै घाँटी अररो",
+      "cue": "Neck stiffness, photophobia, fever",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_head_thunderclap",
+      "kind": "RED_FLAG",
+      "label": "Sudden worst-ever headache",
+      "label_ne": "अचानक जीवनमै सबैभन्दा कडा टाउको दुखाइ",
+      "cue": "Peaked within a minute, 'worst headache of my life'",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_head_focal_deficit",
+      "kind": "RED_FLAG",
+      "label": "Weakness, facial droop, slurred speech or vision loss",
+      "label_ne": "हात खुट्टा कमजोर, मुख बाङ्गो, बोली लरबरिने",
+      "cue": "One-sided weakness, slurred speech",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER"
+    },
+    {
+      "id": "rf_uti_pyelo",
+      "kind": "RED_FLAG",
+      "label": "Kidney infection signs (high fever, rigors, flank pain, vomiting)",
+      "label_ne": "कम्मरको छेउ दुख्ने, कामेर ज्वरो",
+      "cue": "Flank pain, rigors, vomiting with urinary symptoms",
+      "session_level": "URGENT",
+      "disposition": "STAT_INVESTIGATE"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "version": "1.0.0",
+  "note": "PROTOTYPE CONTENT - interaction and allergy rules are a small UNVERIFIED starter set, not a complete drug-interaction database.",
+  "allergies": [
+    { "code": "ALLERGY_PENICILLIN_CLASS", "label": "Penicillin allergy", "blocked_classes": ["PENICILLIN"], "caution_classes": ["CEPHALOSPORIN_3"], "keywords": ["penicillin", "amoxicillin", "amoxycillin", "ampicillin", "augmentin", "cloxacillin"] },
+    { "code": "ALLERGY_CEPHALOSPORIN_CLASS", "label": "Cephalosporin allergy", "blocked_classes": ["CEPHALOSPORIN_3"], "caution_classes": ["PENICILLIN"], "keywords": ["cephalosporin", "cefixime", "ceftriaxone", "cephalexin", "cefuroxime"] },
+    { "code": "ALLERGY_SULFA_CLASS", "label": "Sulfa allergy", "blocked_classes": ["SULFONAMIDE_ANTIBIOTIC"], "caution_classes": [], "keywords": ["sulfa", "sulpha", "cotrimoxazole", "septran", "bactrim"] },
+    { "code": "ALLERGY_NSAIDS", "label": "NSAID / painkiller allergy", "blocked_classes": ["NSAID"], "caution_classes": [], "keywords": ["ibuprofen", "diclofenac", "aspirin", "nsaid", "brufen"] },
+    { "code": "ALLERGY_FLUOROQUINOLONES", "label": "Fluoroquinolone allergy", "blocked_classes": ["FLUOROQUINOLONE"], "caution_classes": [], "keywords": ["ciprofloxacin", "cipro", "ofloxacin", "levofloxacin", "quinolone"] },
+    { "code": "ALLERGY_MACROLIDES", "label": "Macrolide allergy", "blocked_classes": ["MACROLIDE"], "caution_classes": [], "keywords": ["azithromycin", "clarithromycin", "erythromycin", "macrolide"] }
+  ],
+  "comorbidities": [
+    { "code": "COMORB_CKD", "label": "Chronic kidney disease" },
+    { "code": "COMORB_PUD", "label": "Peptic ulcer / GI bleed history" },
+    { "code": "COMORB_HEPATIC", "label": "Chronic liver disease" },
+    { "code": "COMORB_T2DM", "label": "Diabetes" },
+    { "code": "COMORB_HTN", "label": "Hypertension" },
+    { "code": "COMORB_ASTHMA_COPD", "label": "Asthma / COPD" },
+    { "code": "COMORB_IHD", "label": "Heart disease" }
+  ],
+  "interactions": [
+    { "a": "NSAID", "b": "ANTICOAGULANT", "severity": "BLOCKED", "message": "NSAID with an anticoagulant: major bleeding risk." },
+    { "a": "NSAID", "b": "NSAID", "severity": "WARNING", "message": "Two NSAIDs together: avoid duplicate NSAID therapy." },
+    { "a": "NSAID", "b": "ARB", "severity": "WARNING", "message": "NSAID with ARB: reduces BP control and can harm kidney function." },
+    { "a": "NSAID", "b": "ACE_INHIBITOR", "severity": "WARNING", "message": "NSAID with ACE inhibitor: reduces BP control and can harm kidney function." },
+    { "a": "NSAID", "b": "CORTICOSTEROID", "severity": "WARNING", "message": "NSAID with steroid: higher GI bleeding risk." },
+    { "a": "DRUG_CLARITHROMYCIN", "b": "STATIN", "severity": "BLOCKED", "message": "Clarithromycin raises statin levels: risk of severe muscle damage." },
+    { "a": "QT_PROLONGING", "b": "QT_PROLONGING", "severity": "WARNING", "message": "Two QT-prolonging drugs: additive heart-rhythm risk." },
+    { "a": "DRUG_METRONIDAZOLE", "b": "ANTICOAGULANT", "severity": "WARNING", "message": "Metronidazole increases warfarin effect: check INR." },
+    { "a": "FLUOROQUINOLONE", "b": "ANTICOAGULANT", "severity": "WARNING", "message": "Fluoroquinolone may increase warfarin effect: check INR." },
+    { "a": "FLUOROQUINOLONE", "b": "CORTICOSTEROID", "severity": "CAUTION", "message": "Fluoroquinolone with steroid: tendon rupture risk." },
+    { "a": "FLUOROQUINOLONE", "b": "SULFONYLUREA", "severity": "CAUTION", "message": "Fluoroquinolone with sulfonylurea: blood sugar swings." }
+  ],
+  "investigations": [
+    { "id": "INV_ECG", "name": "12-lead ECG" },
+    { "id": "INV_TROPONIN", "name": "Troponin I" },
+    { "id": "INV_CBC", "name": "Complete blood count" },
+    { "id": "INV_RBS", "name": "Random blood sugar" },
+    { "id": "INV_HBA1C", "name": "HbA1c" },
+    { "id": "INV_RFT", "name": "Renal function (urea, creatinine, electrolytes)" },
+    { "id": "INV_LFT", "name": "Liver function test" },
+    { "id": "INV_LIPID", "name": "Lipid profile" },
+    { "id": "INV_URINE_RE", "name": "Urine routine examination" },
+    { "id": "INV_URINE_CS", "name": "Urine culture and sensitivity" },
+    { "id": "INV_STOOL_RE", "name": "Stool routine examination" },
+    { "id": "INV_BLOOD_CULTURE", "name": "Blood culture" },
+    { "id": "INV_CXR", "name": "Chest X-ray PA view" },
+    { "id": "INV_SPO2", "name": "Pulse oximetry (SpO2)" },
+    { "id": "INV_UGI_ENDO", "name": "Upper GI endoscopy (if alarm features or no response)" }
+  ]
+}

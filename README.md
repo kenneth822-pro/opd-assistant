@@ -67,11 +67,36 @@ non-commercial).
    - **Ask next** — red flags the patient may have mentioned (Present / Absent), red flags to **rule out**, pregnancy check, protocol checklist questions (Asked), the AI's suggested next questions, "don't forget" basics (allergy, current medicines), and conditions that **sound likely from keywords** (Add).
    - **Problem cards** — while taking history: the **likely prescription** (greyed) and what is still needed before it can be given; in Plan: the suggested prescription that passed all safety checks, with Accept / Dismiss.
    - **Live transcript** — doctor / patient / attendant lines in colour, a "listening…" line and parts being written down.
+   - **Working diagnosis** — a one-line strip that is always visible; it updates as the conversation changes (see below).
 5. **💡 Suggest** cuts the current audio and updates suggestions straight away. **⏸ Pause** does the same and shows a "Paused" summary: what to ask next and the likely prescription so far.
-6. **■ End** → the last audio is transcribed, failed parts are retried, and the notes model writes the final note from the full transcript. If the AI note fails, a **note built on the phone** from everything captured is shown instead (never an empty note), with **Try AI note again**.
+6. **■ End** (asks you to confirm, so a mis-tap does not stop the recording) → the last audio is transcribed, failed parts are retried, and the notes model writes the final note from the full transcript. If the AI note fails, a **note built on the phone** from everything captured is shown instead (never an empty note), with **Try AI note again**.
 7. On **Review** you can settle conflicts, confirm pregnancy status, enter vitals, mark questions asked, clear red flags (with a reason), override an escalation, accept/dismiss medicines, and **Share** the slip as text.
 
 Tips: say vitals aloud ("BP 150 by 95, SpO2 96"), say exam findings aloud, and say "अब औषधि लेखिदिन्छु" when moving to treatment.
+
+### Working diagnosis and the OPD sheet (live)
+
+The strip under the patient chips lists the leading **working diagnoses** with a band — **Likely**, **Possible**, **Less likely** —
+plus **Don't miss** conditions implied by suspected or confirmed red flags. It is recomputed on the phone every time the
+transcript, vitals, history or your confirmations change (no network, no AI needed), and shows what moved: **new**, **↑ / ↓**.
+Tap the strip to open the **layer** (on tablets and wide screens it is a **side pane** that stays open):
+
+- **Diagnosis tab** — for each condition, *why*: the problem you filed, keywords heard, measured values that support it,
+  and what was **denied** ("no fever" counts against fever). Nothing you filed is ever hidden. Age, sex, comorbidity or medicines alone never
+  raise a diagnosis; only symptoms, measurements and history do. This is an aid to your thinking, **not** a diagnosis.
+- **OPD sheet tab** — the whole consultation as one sheet that fills in as you talk: patient, alerts, history, examination (as spoken),
+  provisional diagnosis, AI suggestions (labelled unverified), don't-miss, red flags, still to cover, investigations to consider and
+  treatment so far. **Share sheet as text** sends it.
+
+When the AI notes model is on, it may add its own differential; it is validated against the catalogue and shown with the same bands.
+
+**Scope.** The protocols are written for **adults**. Under 18, or with no age recorded, the app says so on the Live and Review
+screens and on the slip, and does not dose as if the patient were an adult.
+
+**If the app is interrupted.** The facts of the consultation (transcript, vitals, history, your confirmations — not derived advice,
+which is recomputed) are saved on the phone about 1.5 s after each change. After a call, a crash or Android reclaiming the app,
+**Home → Unfinished consultation** reopens it on the Review screen (the audio itself is not resumed). Starting a new consultation or
+**Delete all audio** removes it. If the microphone goes silent or is taken by another app, the Live screen says so and offers **Restart microphone**.
 
 ## 4. How it works
 
@@ -114,7 +139,7 @@ Key safety rules (all enforced in code and covered by tests):
 | `engine/src/main/resources/catalogues/v1/` | **All clinical content** (conditions, red flags, regimens, formulary, interactions). Review these JSON files clinically. |
 | `engine/src/main/kotlin/` | Safety engine: reducer, safety checks, Nepali instruction templates, prompt + schema builder. No dependencies. |
 | `engine/src/test/kotlin/` | 120 tests incl. catalogue integrity, keyword hints with Nepali negation, the adult-only scope guard, the live differential, provenance rules, crash-safe state, and a randomized "AI can never loosen safety" check. |
-| `speech/` | Pure-Kotlin on-device speech layer: routing (on-device / cloud / fallback), model installer, serial engine wrapper, Nepali-safe output filter, model manifest. 74 tests. |
+| `speech/` | Pure-Kotlin on-device speech layer: routing (on-device / cloud / fallback), model installer, serial engine wrapper, Nepali-safe output filter, model manifest. 78 tests. |
 | `asr-native/` | Optional Android library: whisper.cpp (ARM64 CPU) + JNI. Built only with `-PenableNativeAsr=true`. |
 | `tools/asr/` | Model conversion, accuracy validation (WER) and the JNI self-test. |
 | `docs/ON_DEVICE_ASR.md` | On-device speech: architecture, verification status, model source/licence, conversion, device test procedure. |
@@ -125,13 +150,15 @@ Key safety rules (all enforced in code and covered by tests):
 ## 6. Known limitations of this prototype
 
 - Recording only works while the app is open on screen (no background recording service yet).
-- No patient records are saved; starting a new consultation deletes the previous audio.
+- No patient records are kept: the audio and the one unfinished-consultation file live in app-private storage (not separately encrypted) until you start a new consultation or delete them.
 - On-device speech is **not yet verified on a phone**: it compiles and its logic and JNI bridge are tested, but real inference, Nepali accuracy, speed and battery still have to be measured on your device (procedure in `docs/ON_DEVICE_ASR.md`). It runs on the CPU; there is no Snapdragon NPU path yet.
 - No PDF / thermal printing yet (Share as text only).
 - Speaker labels come from the AI and can be wrong (Whisper gives none; the notes model infers them).
 - Free model tiers have daily limits; a 10-minute live consultation uses roughly 40-80 requests.
 - The catalogue covers 14 adult OPD conditions. Children, pregnancy-specific care and emergencies are out of scope.
 - Brand names and safety metadata are best-effort placeholders.
+- **Nepal STP guidelines are not in the catalogue yet.** The source documents could not be downloaded from where this was built. The app now tracks the status of every catalogue entry (**unverified / matched to a source / clinician-verified**; summary on Home) and a catalogue check refuses to let an entry claim more verification than its evidence supports, but the content itself is still the original placeholder set. See `engine/.../catalogues/v1/conditions.json` → `reference_documents`.
+- The new layouts (diagnosis strip, layer, side pane) compile against the real Android framework in a host test harness and in the CI build, but have not been rendered or looked at on a phone.
 
 ## 7. For developers
 

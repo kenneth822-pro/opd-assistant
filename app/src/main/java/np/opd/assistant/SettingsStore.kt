@@ -7,6 +7,7 @@ import android.util.Base64
 import np.opd.assistant.ai.ModelInfo
 import np.opd.assistant.ai.Provider
 import np.opd.engine.J
+import np.opd.speech.SpeechEngine
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -82,6 +83,24 @@ class SettingsStore(context: Context) {
     var segmentSeconds: Int
         get() = prefs.getInt("segment_seconds", 15).coerceIn(8, 60)
         set(value) = prefs.edit().putInt("segment_seconds", value.coerceIn(8, 60)).apply()
+
+    /**
+     * Where audio is turned into text. Default: automatic (on-device first). With no on-device model installed this
+     * behaves exactly like the cloud path, so existing installs keep working unchanged.
+     */
+    var speechEngine: SpeechEngine
+        get() = SpeechEngine.parse(prefs.getString("speech_engine", null))
+        set(value) = prefs.edit().putString("speech_engine", value.name).apply()
+
+    /** Which entry of the bundled speech-model manifest to use. */
+    var localModelId: String
+        get() = prefs.getString("local_model_id", "") ?: ""
+        set(value) = prefs.edit().putString("local_model_id", value).apply()
+
+    /** CPU threads for on-device recognition; tuned on the phone (see docs/ON_DEVICE_ASR.md). */
+    var localAsrThreads: Int
+        get() = prefs.getInt("local_asr_threads", 6).coerceIn(1, 8)
+        set(value) = prefs.edit().putInt("local_asr_threads", value.coerceIn(1, 8)).apply()
 
     var disclaimerAccepted: Boolean
         get() = prefs.getBoolean("disclaimer_v1", false)

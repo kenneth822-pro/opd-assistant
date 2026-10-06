@@ -58,6 +58,11 @@ android {
 
 dependencies {
     implementation(project(":engine"))
+    implementation(project(":speech"))
+    // The native speech engine is opt-in (-PenableNativeAsr=true); the app finds it by name at run time.
+    if (rootProject.findProject(":asr-native") != null) {
+        implementation(project(":asr-native"))
+    }
 
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)

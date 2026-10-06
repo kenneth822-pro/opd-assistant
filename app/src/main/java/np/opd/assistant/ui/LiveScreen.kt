@@ -47,6 +47,7 @@ import np.opd.engine.Phase
 import np.opd.engine.Pregnancy
 import np.opd.engine.Problem
 import np.opd.engine.QuestionDef
+import np.opd.speech.SpeechEngine
 
 /* ============================== Live consultation ============================== */
 
@@ -147,9 +148,14 @@ private fun StatusHeader(st: UiState) {
                 color = if (st.paused) Palette.urgentFg else Palette.emergencyFg,
                 fontWeight = FontWeight.Bold
             )
-            val speech = st.speechModel?.id ?: "?"
-            val notes = st.analysisModel?.id
+            // When speech runs on the phone, the cloud speech model (if any) is only the notes model's default.
+            val onPhone = st.speechEngine != SpeechEngine.CLOUD && st.localAsr.isReady
+            val speech = if (onPhone) "on-device" else (st.speechModel?.id ?: "?")
+            val notes = st.analysisModel?.id ?: if (onPhone) st.speechModel?.id else null
             Muted(if (notes == null) "AI: $speech" else "Speech: $speech · Notes: $notes")
+            if (st.speechEngine != SpeechEngine.CLOUD && (onPhone || st.speechEngine == SpeechEngine.ON_DEVICE)) {
+                Text("Local ASR · ${st.localAsr.label}", color = if (st.localAsr.isReady) Palette.okFg else Palette.urgentFg, fontSize = 12.sp)
+            }
         }
     }
     if (st.recording && !st.paused) LinearProgressIndicator(progress = { st.level }, modifier = Modifier.fillMaxWidth().height(6.dp))

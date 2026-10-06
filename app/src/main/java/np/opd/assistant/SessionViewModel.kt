@@ -1,6 +1,10 @@
 package np.opd.assistant
 
+import android.Manifest
 import android.app.Application
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -16,6 +20,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import np.opd.assistant.asr.OnDeviceAsr
 import np.opd.assistant.ai.AiClient
 import np.opd.assistant.ai.AiPart
 import np.opd.assistant.ai.ApiException
@@ -37,6 +42,12 @@ import np.opd.engine.Notes
 import np.opd.engine.Prompts
 import np.opd.engine.Reducer
 import np.opd.engine.TranscriptLine
+import np.opd.speech.AsrException
+import np.opd.speech.InstallState
+import np.opd.speech.LocalAsrStatus
+import np.opd.speech.SpeechEngine
+import np.opd.speech.SpeechRoute
+import np.opd.speech.SpeechRouting
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -91,7 +102,12 @@ data class UiState(
     val models: Map<Provider, List<ModelInfo>> = emptyMap(),
     val keys: Set<Provider> = emptySet(),
     val customBaseUrl: String = "",
-    val modelsBusy: String? = null
+    val modelsBusy: String? = null,
+    /** Where audio becomes text (doctor's choice) and the state of the on-device engine and its model. */
+    val speechEngine: SpeechEngine = SpeechEngine.AUTO,
+    val localAsr: LocalAsrStatus = LocalAsrStatus.NotInstalled,
+    val localInstall: InstallState = InstallState.NotInstalled,
+    val localAsrTest: String? = null
 ) {
     val notesModel: ModelInfo? get() = analysisModel ?: speechModel
     val pendingSegments: Int get() = segments.count { it.state == SegState.QUEUED || it.state == SegState.TRANSCRIBING }
@@ -102,6 +118,9 @@ data class UiState(
 class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     val settings = SettingsStore(app)
+
+    /** On-device speech recognition: model files + engine. The UI and this class only see statuses and transcript lines. */
+    val onDeviceAsr = OnDeviceAsr(app, settings)
 
     val catalogues: Catalogues?
     val catalogueProblems: List<String>
@@ -153,6 +172,8 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         catalogueProblems = problems
         _ui = MutableStateFlow(withSettings(UiState(screen = if (settings.disclaimerAccepted) Screen.HOME else Screen.DISCLAIMER)))
         ui = _ui.asStateFlow()
+        onDeviceAsr.statusFlow?.let { f -> viewModelScope.launch { f.collect { s -> _ui.update { it.copy(localAsr = s) } } } }
+        onDeviceAsr.installFlow?.let { f -> viewModelScope.launch { f.collect { s -> _ui.update { it.copy(localInstall = s) } } } }
     }
 
     private fun key(p: Provider): String = keyCache.getOrPut(p) { settings.keyFor(p) }
@@ -163,7 +184,10 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         backupModel = settings.backupModel,
         models = Provider.values().associateWith { settings.models(it) },
         keys = Provider.values().filter { key(it).isNotBlank() }.toSet(),
-        customBaseUrl = settings.customBaseUrl
+        customBaseUrl = settings.customBaseUrl,
+        speechEngine = settings.speechEngine,
+        localAsr = onDeviceAsr.status(),
+        localInstall = onDeviceAsr.installState()
     )
 
     private fun refreshSettings() = _ui.update { withSettings(it) }
@@ -265,12 +289,12 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun testModels() {
-        val speech = settings.speechModel ?: return run { _ui.update { it.copy(testResult = "Choose a speech model first.") } }
         val roles = listOfNotNull(
-            "Speech" to speech,
+            settings.speechModel?.let { "Speech" to it },
             settings.analysisModel?.let { "Notes" to it },
             settings.backupModel?.let { "Backup" to it }
         )
+        if (roles.isEmpty()) return _ui.update { it.copy(testResult = "Choose a model first.") }
         _ui.update { it.copy(testResult = "Testing ${roles.size} model(s)…") }
         viewModelScope.launch {
             val lines = mutableListOf<String>()
@@ -349,15 +373,111 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         throw last ?: ApiException("Request failed")
     }
 
+    /* ---------------- on-device speech ---------------- */
+
+    fun chooseSpeechEngine(e: SpeechEngine) {
+        settings.speechEngine = e
+        refreshSettings()
+    }
+
+    fun installLocalModel() {
+        viewModelScope.launch {
+            try {
+                onDeviceAsr.install()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                showMessage("Model install failed: ${e.message}")
+            }
+        }
+    }
+
+    /** Installs a model file the doctor picked (e.g. converted on a computer and copied to the phone). */
+    fun importLocalModel(uri: Uri) {
+        viewModelScope.launch {
+            val stream = try { getApplication<Application>().contentResolver.openInputStream(uri) } catch (e: Exception) { null }
+            if (stream == null) { showMessage("Could not open that file."); return@launch }
+            onDeviceAsr.importFrom(stream) // success or the reason for failure shows in the model status
+        }
+    }
+
+    fun deleteLocalModel() {
+        if (_ui.value.recording) return showMessage("Stop the consultation first.")
+        onDeviceAsr.deleteModel()
+        _ui.update { it.copy(localAsrTest = null) }
+    }
+
+    fun verifyLocalModel() {
+        viewModelScope.launch {
+            showMessage(if (onDeviceAsr.verify()) "The model file is intact." else "The model file does not match what was installed. Delete it and install it again.")
+        }
+    }
+
+    private fun showTest(text: String) = _ui.update { it.copy(localAsrTest = text) }
+
+    /** Records 6 seconds, transcribes them on the phone and reports the text and the measured speed. */
+    fun testLocalAsr() {
+        val st = _ui.value
+        if (st.recording || st.busy != null) return showTest("Finish the current consultation first.")
+        val app = getApplication<Application>()
+        if (ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+            return showTest("The microphone is not allowed yet. Start a consultation once (it asks for permission), then try again.")
+        viewModelScope.launch {
+            val dir = File(app.cacheDir, "asr-test").apply { deleteRecursively(); mkdirs() }
+            val files = java.util.Collections.synchronizedList(mutableListOf<File>())
+            val rec = WavSegmentRecorder(dir, { 60 }) { f, _, _, _ -> files += f } // no automatic cut: stop() delivers it all
+            try {
+                rec.start()
+            } catch (e: Exception) {
+                showTest("Could not start the microphone: ${e.message}")
+                return@launch
+            }
+            try {
+                for (left in 6 downTo 1) { showTest("Speak now: a Nepali sentence… $left s"); delay(1000) }
+                withContext(Dispatchers.IO) { rec.stop() }
+                val wavFile = files.firstOrNull() ?: return@launch showTest("Nothing was recorded.")
+                showTest("Loading the model and transcribing…")
+                val t0 = System.currentTimeMillis()
+                onDeviceAsr.prepare()
+                val loaded = System.currentTimeMillis()
+                val lines = onDeviceAsr.transcribeWav(withContext(Dispatchers.IO) { wavFile.readBytes() }, null)
+                val done = System.currentTimeMillis()
+                val audioSec = (wavFile.length() - 44) / 32000.0
+                val inferSec = (done - loaded) / 1000.0
+                showTest(
+                    (if (lines.isEmpty()) "No speech recognised." else "Heard: " + lines.joinToString(" ") { it.text }) +
+                        "\n" + "%.1f".format(audioSec) + " s of audio in " + "%.1f".format(inferSec) + " s (real-time factor " + "%.2f".format(inferSec / audioSec) +
+                        "); model load " + "%.1f".format((loaded - t0) / 1000.0) + " s.\n" + onDeviceAsr.diagnostics()
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                showTest("Test failed: ${e.message}")
+            } finally {
+                try { withContext(Dispatchers.IO) { rec.stop() } } catch (e: Exception) { /* already stopped */ }
+                dir.deleteRecursively()
+            }
+        }
+    }
+
     /* ---------------- consultation ---------------- */
 
     fun startConsult(mode: Mode, age: Int?, gender: Gender?) {
         val cat = catalogues ?: return showMessage("Clinical catalogues failed to load.")
-        val speech = settings.speechModel ?: return showMessage("Choose a speech model in Settings first.")
-        if (!speech.audioInput && !speech.transcriptionApi) return showMessage("The speech model must accept audio. Choose another in Settings.")
+        val speech = settings.speechModel
+        val route = SpeechRouting.plan(settings.speechEngine, onDeviceAsr.readiness(), cloudSpeechUsable(speech))
+        if (route is SpeechRoute.Blocked) {
+            // The cloud path keeps the specific messages it has always given.
+            if (settings.speechEngine != SpeechEngine.ON_DEVICE) {
+                if (speech == null) return showMessage("Choose a speech model in Settings first.")
+                if (!speech.audioInput && !speech.transcriptionApi) return showMessage("The speech model must accept audio. Choose another in Settings.")
+                missingAccess(speech)?.let { return showMessage(it) }
+            }
+            return showMessage(route.reason)
+        }
         val notes = settings.analysisModel ?: speech
-        if (notes.transcriptionApi) return showMessage("${speech.id} only turns speech into text. Choose a notes model in Settings (any text model).")
-        missingAccess(speech)?.let { return showMessage(it) }
+            ?: return showMessage("Choose a notes model in Settings (any text model): on-device speech only writes the transcript.")
+        if (notes.transcriptionApi) return showMessage("${notes.id} only turns speech into text. Choose a notes model in Settings (any text model).")
         missingAccess(notes)?.let { return showMessage(it) }
 
         File(getApplication<Application>().filesDir, "sessions").deleteRecursively()
@@ -380,6 +500,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = withSettings(UiState(screen = Screen.RECORDING, mode = mode, case = case, recording = true, hasSession = true))
         startWorkers()
         startTicker()
+        if (route is SpeechRoute.Local || route is SpeechRoute.LocalThenCloud) prepareOnDevice()
     }
 
     /** Called on the recording thread whenever a segment file is closed. */
@@ -473,9 +594,15 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     private fun setSeg(n: Int, f: (SegmentStatus) -> SegmentStatus) =
         _ui.update { st -> st.copy(segments = st.segments.map { if (it.number == n) f(it) else it }) }
 
+    /** What one audio segment became: transcript lines, the raw text for the log, and which engine produced it. */
+    private data class SegmentText(val lines: List<TranscriptLine>, val raw: String, val engine: String)
+
+    private fun cloudSpeechUsable(speech: ModelInfo?): Boolean =
+        speech != null && (speech.audioInput || speech.transcriptionApi) && missingAccess(speech) == null
+
     private suspend fun transcribeSegment(seg: Segment, force: Boolean = false) {
         val cat = catalogues ?: return
-        val speech = sessionSpeech ?: settings.speechModel ?: return
+        val speech = sessionSpeech ?: settings.speechModel // may be null when speech runs on the phone
         if (!force && seg.voiced < MIN_VOICED) {
             setSeg(seg.number) { it.copy(state = SegState.SILENT) }
             if (forceAnalysis) requestAnalysis(true)
@@ -484,30 +611,30 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         setSeg(seg.number) { it.copy(state = SegState.TRANSCRIBING, error = null) }
         try {
             val wav = withContext(Dispatchers.IO) { seg.file.readBytes() }
-            val context = _ui.value.case.transcript.takeLast(6).joinToString("\n") { "${it.speaker}: ${it.text}" }
-            val (result, used) = withFallback(speech, Need.AUDIO, live = true) { client ->
-                val direct = client.transcribe(wav, context)
-                if (direct != null) direct to Prompts.transcriptText(direct)
-                else {
-                    val raw = client.generate(
-                        transcribePrompt,
-                        listOf(
-                            AiPart.Text("Previous lines, for speaker context only (do not repeat them):\n${context.ifBlank { "(start of consultation)" }}\n\nTranscribe audio segment #${seg.number}."),
-                            AiPart.Wav(wav)
-                        ),
-                        transcribeSchema
-                    )
-                    Prompts.parseTranscription(raw) to raw
+            val noCloud = "No cloud speech model is set up (Settings)."
+            // One decision per segment. Audio goes to the cloud only on the Cloud route, or as an explicit fallback
+            // after the on-device engine failed (Automatic mode); never "just in case".
+            val text = when (val route = SpeechRouting.plan(settings.speechEngine, onDeviceAsr.readiness(), cloudSpeechUsable(speech))) {
+                is SpeechRoute.Blocked -> throw ApiException(route.reason)
+                SpeechRoute.Local -> transcribeOnDevice(wav)
+                SpeechRoute.Cloud -> transcribeInCloud(wav, speech ?: throw ApiException(noCloud), seg)
+                SpeechRoute.LocalThenCloud -> try {
+                    transcribeOnDevice(wav)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: AsrException) {
+                    addError("Segment ${seg.number}: ${e.message}. Sent to the cloud speech model instead.")
+                    transcribeInCloud(wav, speech ?: throw ApiException(noCloud), seg)
                 }
             }
-            val (lines, raw) = result
+            val lines = text.lines
             _ui.update { st ->
                 st.copy(
                     case = Reducer.reduce(st.case, LiveDelta(transcript = lines), cat, seg.startMs),
-                    aiLog = (st.aiLog + "Transcript ${seg.number} (${used.id}):\n$raw").takeLast(40)
+                    aiLog = (st.aiLog + "Transcript ${seg.number} (${text.engine}):\n${text.raw}").takeLast(40)
                 )
             }
-            setSeg(seg.number) { it.copy(state = SegState.DONE, model = used.id, lines = lines.size, error = null) }
+            setSeg(seg.number) { it.copy(state = SegState.DONE, model = text.engine, lines = lines.size, error = null) }
             if (lines.isNotEmpty()) refreshHints()
             if (lines.isNotEmpty() || forceAnalysis) requestAnalysis(false)
         } catch (e: CancellationException) {
@@ -516,6 +643,47 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             setSeg(seg.number) { it.copy(state = SegState.FAILED, error = e.message) }
             addError("Segment ${seg.number}: ${e.message}")
             if (forceAnalysis) requestAnalysis(true)
+        }
+    }
+
+    /** Local speech: audio stays on the phone. Throws [AsrException] with a readable message on any failure. */
+    private suspend fun transcribeOnDevice(wav: ByteArray): SegmentText {
+        val lines = onDeviceAsr.transcribeWav(wav, null)
+        return SegmentText(lines, Prompts.transcriptText(lines), "on-device")
+    }
+
+    /** The existing cloud speech path, unchanged: audio goes to the selected provider (with backup/cooldown logic). */
+    private suspend fun transcribeInCloud(wav: ByteArray, speech: ModelInfo, seg: Segment): SegmentText {
+        val context = _ui.value.case.transcript.takeLast(6).joinToString("\n") { "${it.speaker}: ${it.text}" }
+        val (result, used) = withFallback(speech, Need.AUDIO, live = true) { client ->
+            val direct = client.transcribe(wav, context)
+            if (direct != null) direct to Prompts.transcriptText(direct)
+            else {
+                val raw = client.generate(
+                    transcribePrompt,
+                    listOf(
+                        AiPart.Text("Previous lines, for speaker context only (do not repeat them):\n${context.ifBlank { "(start of consultation)" }}\n\nTranscribe audio segment #${seg.number}."),
+                        AiPart.Wav(wav)
+                    ),
+                    transcribeSchema
+                )
+                Prompts.parseTranscription(raw) to raw
+            }
+        }
+        val (lines, raw) = result
+        return SegmentText(lines, raw, used.id)
+    }
+
+    /** Loads the on-device model in the background while recording starts, so the first segment is not delayed. */
+    private fun prepareOnDevice() {
+        viewModelScope.launch {
+            try {
+                onDeviceAsr.prepare()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                addError("On-device speech: ${e.message}")
+            }
         }
     }
 
@@ -730,6 +898,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         tickerJob?.cancel()
         recorder?.stop()
+        onDeviceAsr.release()
         super.onCleared()
     }
 

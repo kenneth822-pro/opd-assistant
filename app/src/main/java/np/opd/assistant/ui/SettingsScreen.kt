@@ -106,13 +106,15 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
         st.modelsBusy?.let { Text(it); LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
         st.message?.let { Text(it, color = Palette.infoFg, fontWeight = FontWeight.SemiBold) }
 
+        SpeechSettingsCard(st, vm)
+
         Text("AI providers", style = MaterialTheme.typography.titleMedium)
         Muted("Add a key for at least one provider. Keys are encrypted on this phone and only sent to that provider.")
         Provider.values().forEach { p -> ProviderCard(p, st, vm) }
 
         Text("Models", style = MaterialTheme.typography.titleMedium)
-        SectionCard("1. Speech model — listens to the audio") {
-            ModelSummary(st.speechModel, "Not chosen yet")
+        SectionCard("1. Cloud speech model — listens to the audio (used by Cloud, and as the Automatic fallback)") {
+            ModelSummary(st.speechModel, "Not chosen yet" + if (st.speechEngine == np.opd.speech.SpeechEngine.ON_DEVICE) " (not needed while speech is On-device)" else "")
             Muted("Needs AUDIO or SPEECH-TO-TEXT. Gemini Flash models work well for Nepali; Groq Whisper is a fast alternative.")
             Button(onClick = { picker = PickerTarget.SPEECH }) { Text("Choose speech model") }
         }

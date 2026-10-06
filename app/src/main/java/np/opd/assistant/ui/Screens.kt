@@ -63,6 +63,7 @@ import np.opd.engine.Severity
 import np.opd.engine.Sig
 import np.opd.engine.TranscriptLine
 import np.opd.engine.Vitals
+import np.opd.speech.SpeechEngine
 
 private val AppColors = lightColorScheme(
     primary = Color(0xFF0B5C66),
@@ -112,19 +113,20 @@ private fun DisclaimerScreen(vm: SessionViewModel) {
 
 @Composable
 private fun HomeScreen(st: UiState, vm: SessionViewModel) {
-    val ready = st.speechModel != null && vm.catalogues != null
+    val speechReady = st.speechModel != null || st.localAsr.isReady
+    val ready = speechReady && vm.catalogues != null
     Page("OPD Assistant") {
         Text("Ambient clinical assistant — prototype", style = MaterialTheme.typography.titleMedium)
         Muted("Listens to a consultation, shows what to ask next and what to rule out, suggests protocol medicines after safety checks, and writes the note.")
-        if (st.speechModel == null) {
+        if (!speechReady) {
             SectionCard("Step 1: add a key and choose a model", container = Palette.urgentBg) {
                 Text("Open Settings, paste a Gemini key (free from aistudio.google.com/apikey) and the app will load the current models and pick sensible defaults.")
                 Button(onClick = { vm.go(Screen.SETTINGS) }) { Text("Open Settings") }
             }
         } else {
             SectionCard("AI models") {
-                Text("Speech: ${st.speechModel.provider.label} · ${st.speechModel.id}", fontSize = 13.sp)
-                Text("Notes: " + (st.analysisModel?.let { "${it.provider.label} · ${it.id}" } ?: "same as speech"), fontSize = 13.sp)
+                Text("Speech: " + speechSummary(st), fontSize = 13.sp)
+                Text("Notes: " + (st.analysisModel?.let { "${it.provider.label} · ${it.id}" } ?: if (st.speechModel != null) "same as the cloud speech model" else "not chosen"), fontSize = 13.sp)
                 Text("Backup: " + (st.backupModel?.let { "${it.provider.label} · ${it.id}" } ?: "none (recommended: add one)"), fontSize = 13.sp)
             }
         }
@@ -147,6 +149,17 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
         vm.catalogues?.let { c ->
             Muted("Built-in clinical catalogue v${c.version}: ${c.conditions.size} common conditions with question checklists, red flags and keywords, ${c.regimens.size} regimens, ${c.drugs.size} drugs, ${c.redFlags.size} red flags. Works on the phone without the AI. All content is UNVERIFIED prototype data.")
         }
+    }
+}
+
+/** One line for the home screen: where speech is recognised, including the cloud fallback if one is set. */
+private fun speechSummary(st: UiState): String {
+    val cloud = st.speechModel?.let { "${it.provider.label} · ${it.id}" }
+    val onPhone = st.speechEngine != SpeechEngine.CLOUD && (st.localAsr.isReady || st.speechEngine == SpeechEngine.ON_DEVICE)
+    return when {
+        onPhone && st.speechEngine == SpeechEngine.AUTO && cloud != null -> "on-device Nepali (${st.localAsr.label}); cloud fallback $cloud"
+        onPhone -> "on-device Nepali (${st.localAsr.label})"
+        else -> cloud ?: "not chosen"
     }
 }
 
@@ -361,6 +374,10 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
                 st.segments.forEach {
                     Muted("#${it.number} ${SessionViewModel.clock((it.startMs / 1000).toInt())} ${it.durationMs / 1000}s ${it.state.name.lowercase()} ${it.model ?: ""} ${it.lines} lines ${it.error?.take(120) ?: ""}")
                 }
+            }
+            SectionCard("On-device speech") {
+                Muted(vm.onDeviceAsr.diagnostics().ifBlank { "Not used in this consultation." })
+                vm.onDeviceAsr.manifestProblems.forEach { Muted("Manifest: $it") }
             }
             SectionCard("Audit log") { s.audit.takeLast(80).forEach { Text(it, fontSize = 11.sp, fontFamily = FontFamily.Monospace) } }
             SectionCard("Errors") { if (st.errors.isEmpty()) Muted("none") else st.errors.forEach { Muted(it) } }

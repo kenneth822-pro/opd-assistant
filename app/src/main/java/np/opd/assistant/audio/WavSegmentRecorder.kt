@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import np.opd.speech.MicWatch
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
@@ -35,6 +36,15 @@ class WavSegmentRecorder(
     private var index = 0
     private var totalSamples = 0L
 
+    /** Detects a microphone that is open but delivering only silence (call, other app, app in background). */
+    private val micWatch = MicWatch()
+    /** Set if the microphone failed for good (e.g. taken by another app); null while recording is healthy. */
+    @Volatile var failure: String? = null
+        private set
+
+    /** What to tell the doctor right now, or null if the microphone is fine. */
+    fun micProblem(): String? = failure ?: micWatch.message()
+
     val isRunning: Boolean get() = running
 
     @SuppressLint("MissingPermission") // permission is requested before recording starts
@@ -51,6 +61,8 @@ class WavSegmentRecorder(
             throw IllegalStateException("The microphone could not be opened (is another app using it?)")
         }
         rec.startRecording()
+        failure = null
+        micWatch.reset()
         running = true
         thread = Thread({ loop(rec, chunkBytes / 2) }, "wav-recorder").apply { start() }
     }
@@ -62,6 +74,7 @@ class WavSegmentRecorder(
         thread = null
         level = 0f
         currentSegmentMs = 0
+        micWatch.reset()
     }
 
     fun cutNow() {
@@ -70,11 +83,26 @@ class WavSegmentRecorder(
 
     private fun loop(rec: AudioRecord, samplesPerRead: Int) {
         val buf = ShortArray(samplesPerRead)
+        var errors = 0
         var seg: SegmentWriter? = null
         try {
             while (running) {
                 val n = rec.read(buf, 0, buf.size)
-                if (n <= 0) continue
+                if (n < 0) {
+                    // A negative value is an error code, not "no data". It used to be skipped, which spun the CPU
+                    // at 100% while the screen still said "listening". Transient errors get a few tries; a dead
+                    // microphone (taken by a call or another app) ends the recording loop with a reason.
+                    errors++
+                    if (n == AudioRecord.ERROR_DEAD_OBJECT || errors > MAX_READ_ERRORS) {
+                        failure = "The microphone stopped working (code $n): another app or a call may have taken it."
+                        running = false
+                        break
+                    }
+                    Thread.sleep(20)
+                    continue
+                }
+                if (n == 0) { Thread.sleep(10); continue }
+                errors = 0
                 val writer = seg ?: SegmentWriter(nextFile(), totalSamples).also { seg = it }
                 writer.write(buf, n)
                 totalSamples += n
@@ -85,6 +113,7 @@ class WavSegmentRecorder(
                     sum += v * v
                 }
                 val rms = sqrt(sum / n)
+                micWatch.onChunk(rms, n, RATE)
                 level = (rms / 4000.0).coerceIn(0.0, 1.0).toFloat()
                 writer.reads++
                 if (rms >= VOICE_RMS) writer.voicedReads++
@@ -161,6 +190,8 @@ class WavSegmentRecorder(
 
     companion object {
         const val RATE = 16000
+        /** Consecutive failed reads tolerated before the microphone is declared lost (about a second). */
+        private const val MAX_READ_ERRORS = 50
         private const val SILENCE_RMS = 450.0
         /** Quieter than the cut threshold, so soft speech still counts as speech. */
         private const val VOICE_RMS = 300.0

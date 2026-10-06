@@ -1,6 +1,14 @@
 package np.opd.assistant.ui
 
 import android.Manifest
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.window.Dialog
+import np.opd.assistant.ai.ModelInfo
+import np.opd.assistant.ai.Provider
 import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
@@ -112,14 +120,19 @@ private fun DisclaimerScreen(vm: SessionViewModel) {
 
 @Composable
 private fun HomeScreen(st: UiState, vm: SessionViewModel) {
-    val keyMissing = vm.settings.apiKey.isBlank()
+    val ready = st.speechModel != null && vm.catalogues != null
     Page("OPD Assistant") {
         Text("Ambient clinical assistant — prototype", style = MaterialTheme.typography.titleMedium)
         Muted("Listens to a consultation, writes the note, and suggests protocol medicines only after safety checks.")
-        if (keyMissing) {
-            SectionCard("Step 1: add your Gemini API key", container = Palette.urgentBg) {
-                Text("Get a key at aistudio.google.com/apikey, then paste it in Settings.")
+        if (st.speechModel == null) {
+            SectionCard("Step 1: add a key and choose a model", container = Palette.urgentBg) {
+                Text("Open Settings, paste a Gemini key (free from aistudio.google.com/apikey) and the app will load the current models.")
                 Button(onClick = { vm.go(Screen.SETTINGS) }) { Text("Open Settings") }
+            }
+        } else {
+            SectionCard("AI models") {
+                Text("Speech: ${st.speechModel.provider.label} · ${st.speechModel.id}", fontSize = 13.sp)
+                Text("Notes: " + (st.analysisModel?.let { "${it.provider.label} · ${it.id}" } ?: "same model (one step)"), fontSize = 13.sp)
             }
         }
         if (vm.catalogueProblems.isNotEmpty()) {
@@ -129,7 +142,7 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
         }
         Button(
             onClick = { vm.newConsultation() },
-            enabled = !keyMissing && vm.catalogues != null,
+            enabled = ready,
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) { Text("New consultation", fontSize = 18.sp) }
         if (st.hasSession && st.case.tick > 0) {
@@ -146,51 +159,216 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
 
 /* ============================== Settings ============================== */
 
+private enum class PickerTarget { SPEECH, ANALYSIS }
+
 @Composable
 private fun SettingsScreen(st: UiState, vm: SessionViewModel) {
-    var key by remember { mutableStateOf("") }
-    var showKey by remember { mutableStateOf(false) }
-    var liveModel by remember { mutableStateOf(vm.settings.liveModel) }
-    var finalModel by remember { mutableStateOf(vm.settings.finalModel) }
+    var geminiKey by remember { mutableStateOf("") }
+    var orKey by remember { mutableStateOf("") }
     var seconds by remember { mutableStateOf(vm.settings.segmentSeconds.toString()) }
-    val hasKey = vm.settings.apiKey.isNotBlank()
+    var picker by remember { mutableStateOf<PickerTarget?>(null) }
     BackHandler { vm.go(Screen.HOME) }
+
+    picker?.let { target ->
+        ModelPickerDialog(
+            title = if (target == PickerTarget.SPEECH) "Speech model (must hear audio)" else "Notes model (reads the transcript)",
+            gemini = st.geminiModels,
+            openRouter = st.openRouterModels,
+            requireAudio = target == PickerTarget.SPEECH,
+            onLoad = { vm.loadModels(it) },
+            loading = st.modelsBusy,
+            onPick = { m ->
+                if (target == PickerTarget.SPEECH) vm.chooseSpeechModel(m) else vm.chooseAnalysisModel(m)
+                picker = null
+            },
+            onDismiss = { picker = null }
+        )
+    }
+
     Page("Settings", onBack = { vm.go(Screen.HOME) }) {
-        SectionCard("Gemini API key") {
-            Muted(if (hasKey) "A key is saved (encrypted on this phone). Enter a new one only to replace it." else "No key saved yet. Create one at aistudio.google.com/apikey.")
-            OutlinedTextField(
-                value = key,
-                onValueChange = { key = it },
-                label = { Text(if (hasKey) "Replace key (optional)" else "Paste API key") },
-                singleLine = true,
-                visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            TextButton(onClick = { showKey = !showKey }) { Text(if (showKey) "Hide" else "Show") }
-            Muted("Use a paid-tier key for testing: free-tier rate limits are too low for live mode, and free-tier data may be used by Google to improve products.")
+        st.modelsBusy?.let { Text(it); LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
+        st.message?.let { Text(it, color = Palette.infoFg, fontWeight = FontWeight.SemiBold) }
+
+        // ---- Keys ----
+        KeyCard(
+            title = "Google Gemini key",
+            saved = st.hasGeminiKey,
+            help = "Free key: aistudio.google.com/apikey (Google account). The free tier is fine for role-play tests; it has rate limits and Google may use free-tier data to improve its products.",
+            value = geminiKey,
+            onChange = { geminiKey = it },
+            onSave = { vm.saveKey(Provider.GEMINI, geminiKey); geminiKey = "" },
+            onLoad = { vm.loadModels(Provider.GEMINI) },
+            loaded = st.geminiModels.size
+        )
+        KeyCard(
+            title = "OpenRouter key (optional)",
+            saved = st.hasOpenRouterKey,
+            help = "openrouter.ai/keys. Gives access to many models, including free ones (e.g. DeepSeek) for the notes step. Free models: about 20 requests/minute and 50/day (1,000/day after a \$10 credit top-up). Live mode uses ~3-6 requests per minute.",
+            value = orKey,
+            onChange = { orKey = it },
+            onSave = { vm.saveKey(Provider.OPENROUTER, orKey); orKey = "" },
+            onLoad = { vm.loadModels(Provider.OPENROUTER) },
+            loaded = st.openRouterModels.size
+        )
+
+        // ---- Models ----
+        SectionCard("1. Speech model — listens to the audio") {
+            ModelSummary(st.speechModel, "Not chosen yet")
+            Muted("Needs a model that accepts audio input (tag AUDIO). Gemini Flash models work well for Nepali.")
+            Button(onClick = { picker = PickerTarget.SPEECH }) { Text("Choose speech model") }
         }
-        SectionCard("Models") {
-            OutlinedTextField(value = liveModel, onValueChange = { liveModel = it }, label = { Text("Live model (fast)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = finalModel, onValueChange = { finalModel = it }, label = { Text("Final note model") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Muted("Model names change over time. If a name stops working, check the current list in Google AI Studio.")
+        SectionCard("2. Notes model — turns speech into structured notes") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = st.oneStep, onCheckedChange = { checked ->
+                    if (!checked) picker = PickerTarget.ANALYSIS
+                    if (checked) vm.chooseAnalysisModel(null)
+                })
+                Text("Use the speech model for this too (one step, fastest)")
+            }
+            if (!st.oneStep) {
+                ModelSummary(st.analysisModel, "")
+                Muted("Two steps: the speech model writes a transcript, then this model reads it. Any text model works, including free OpenRouter models.")
+                OutlinedButton(onClick = { picker = PickerTarget.ANALYSIS }) { Text("Change notes model") }
+            }
+        }
+        OutlinedButton(onClick = { vm.testModels() }, modifier = Modifier.fillMaxWidth()) { Text("Test selected models") }
+        st.testResult?.let { Text(it) }
+
+        SectionCard("Recording") {
             OutlinedTextField(
                 value = seconds,
-                onValueChange = { seconds = it.filter { ch -> ch.isDigit() }.take(2) },
-                label = { Text("Live segment length (seconds, 10-60)") },
+                onValueChange = {
+                    seconds = it.filter { ch -> ch.isDigit() }.take(2)
+                    seconds.toIntOrNull()?.let { s -> if (s in 10..60) vm.setSegmentSeconds(s) }
+                },
+                label = { Text("Segment length in seconds (10-60)") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
+            Muted("Audio is cut at the first pause after this many seconds. Shorter = faster suggestions, more requests.")
         }
-        Button(onClick = {
-            vm.saveSettings(key.ifBlank { null }, liveModel, finalModel, seconds.toIntOrNull() ?: 20)
-            key = ""
-        }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
-        OutlinedButton(onClick = { vm.testConnection() }, modifier = Modifier.fillMaxWidth()) { Text("Test connection") }
-        st.testResult?.let { Text(it) }
-        st.message?.let { Text(it, color = Palette.okFg) }
-        HorizontalDivider()
         OutlinedButton(onClick = { vm.deleteAllAudio() }, modifier = Modifier.fillMaxWidth()) { Text("Delete all recorded audio on this phone") }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun KeyCard(
+    title: String,
+    saved: Boolean,
+    help: String,
+    value: String,
+    onChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onLoad: () -> Unit,
+    loaded: Int
+) {
+    var show by remember { mutableStateOf(false) }
+    SectionCard(title) {
+        Text(if (saved) "✓ Key saved (encrypted on this phone)" else "No key saved", color = if (saved) Palette.okFg else Palette.greyFg, fontSize = 13.sp)
+        OutlinedTextField(
+            value = value,
+            onValueChange = onChange,
+            label = { Text(if (saved) "Paste a new key to replace" else "Paste key") },
+            singleLine = true,
+            visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = onSave, enabled = value.isNotBlank()) { Text("Save key") }
+            OutlinedButton(onClick = onLoad) { Text("Load models") }
+            TextButton(onClick = { show = !show }) { Text(if (show) "Hide" else "Show") }
+        }
+        if (loaded > 0) Muted("$loaded models loaded")
+        Muted(help)
+    }
+}
+
+@Composable
+private fun ModelSummary(m: ModelInfo?, empty: String) {
+    if (m == null) {
+        if (empty.isNotBlank()) Text(empty, color = Palette.urgentFg)
+        return
+    }
+    Text(m.name, fontWeight = FontWeight.SemiBold)
+    Text("${m.provider.label} · ${m.id}", fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { m.tags().forEach { TagPill(it) } }
+}
+
+@Composable
+private fun TagPill(tag: String) = when (tag) {
+    "FREE" -> Pill("FREE", Palette.okBg, Palette.okFg)
+    "PAID" -> Pill("PAID", Palette.greyBg, Palette.greyFg)
+    "AUDIO" -> Pill("AUDIO", Palette.infoBg, Palette.infoFg)
+    else -> Pill(tag, Palette.greyBg, Palette.greyFg)
+}
+
+@Composable
+private fun ModelPickerDialog(
+    title: String,
+    gemini: List<ModelInfo>,
+    openRouter: List<ModelInfo>,
+    requireAudio: Boolean,
+    onLoad: (Provider) -> Unit,
+    loading: String?,
+    onPick: (ModelInfo) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var provider by remember { mutableStateOf(if (gemini.isNotEmpty() || openRouter.isEmpty()) Provider.GEMINI else Provider.OPENROUTER) }
+    var query by remember { mutableStateOf("") }
+    var freeOnly by remember { mutableStateOf(false) }
+    val source = if (provider == Provider.GEMINI) gemini else openRouter
+    val q = query.trim().lowercase()
+    val list = source.filter { m ->
+        (!requireAudio || m.audioInput) &&
+            (!freeOnly || m.free == true) &&
+            (q.isEmpty() || m.id.lowercase().contains(q) || m.name.lowercase().contains(q))
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Provider.values().forEach { p ->
+                        if (p == provider) Button(onClick = { provider = p }) { Text(p.label, fontSize = 12.sp) }
+                        else OutlinedButton(onClick = { provider = p }) { Text(p.label, fontSize = 12.sp) }
+                    }
+                }
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search (e.g. flash, deepseek)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (provider == Provider.OPENROUTER) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = freeOnly, onCheckedChange = { freeOnly = it })
+                    Text("Free models only")
+                }
+                if (requireAudio) Muted("Showing only models that accept audio.")
+                if (provider == Provider.GEMINI) Muted("Gemini cost depends on your key: free tier (rate-limited) or paid.")
+                loading?.let { Text(it, fontSize = 12.sp) }
+                if (source.isEmpty()) {
+                    Muted("No ${provider.label} models loaded yet.")
+                    OutlinedButton(onClick = { onLoad(provider) }) { Text("Load ${provider.label} models") }
+                } else if (list.isEmpty()) {
+                    Muted("No models match." + if (requireAudio && provider == Provider.OPENROUTER) " Few OpenRouter models accept audio; free ones rarely do." else "")
+                }
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
+                    items(list, key = { it.key }) { m ->
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(m) }
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(m.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(m.id, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = Palette.greyFg)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { m.tags().forEach { TagPill(it) } }
+                        }
+                        HorizontalDivider()
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                }
+            }
+        }
     }
 }
 
@@ -293,9 +471,17 @@ private fun RecordingScreen(st: UiState, vm: SessionViewModel) {
             Text(clock, fontSize = 40.sp, fontFamily = FontFamily.Monospace)
             Column {
                 Text(if (st.paused) "⏸ Paused" else if (st.recording) "● Recording" else "Stopped", color = if (st.paused) Palette.urgentFg else Palette.emergencyFg, fontWeight = FontWeight.Bold)
-                if (st.mode == Mode.LIVE) Muted("Segments analysed: ${st.segmentsProcessed}/${st.segmentsRecorded}")
+                Muted("Segments processed: ${st.segmentsProcessed}/${st.segmentsRecorded}")
             }
         }
+        if (st.recording && !st.paused) {
+            LinearProgressIndicator(progress = { st.level }, modifier = Modifier.fillMaxWidth())
+            Muted("Microphone level")
+        }
+        Muted(
+            if (st.oneStep) "Pipeline: ${st.speechModel?.id ?: "?"} hears the audio and writes notes (one step)."
+            else "Pipeline: ${st.speechModel?.id ?: "?"} transcribes → ${st.analysisModel?.id} writes notes."
+        )
         st.busy?.let {
             SectionCard("Please wait") {
                 Text(it)
@@ -306,7 +492,7 @@ private fun RecordingScreen(st: UiState, vm: SessionViewModel) {
         st.message?.let { Text(it, color = Palette.urgentFg) }
 
         if (st.mode == Mode.SCRIBE) {
-            Muted("Scribe mode: nothing is analysed until you end the consultation.")
+            Muted("Scribe mode: audio is transcribed in the background; the note and suggestions are produced when you end the consultation.")
         } else {
             if (st.case.problems.isEmpty()) Muted("Listening… suggestions appear after each ${vm.settings.segmentSeconds}-second segment is analysed.")
             st.case.problems.forEach { p -> LiveProblemCard(p, cat, vm) }

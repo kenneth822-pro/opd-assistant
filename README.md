@@ -22,13 +22,27 @@ Every time code changes, GitHub builds the app automatically (about 5–10 minut
 
 If the newest build is missing, open the **Actions** tab: a red ✗ means the build failed (tell Claude and paste the error).
 
-## 2. Get a Gemini API key
+## 2. Add a key and choose models
 
-1. Go to **aistudio.google.com/apikey** and create an API key.
-2. Use a **paid-tier** key for testing. Free-tier rate limits are too low for live mode, and Google may use free-tier data to improve its products.
-3. In the app: **Settings → paste the key → Save → Test connection**. You should see "Connected".
+The app downloads the **current model list** from each provider, so model names never go out of date.
 
-The key is encrypted on the phone with the Android Keystore. Audio goes directly from the phone to Google; there is no other server.
+**Google Gemini (recommended for the speech model)**
+1. Create a free key at **aistudio.google.com/apikey** (needs a Google account).
+2. App → **Settings → Google Gemini key → paste → Save key**. The app loads Gemini models and picks the newest Flash model automatically.
+3. The free tier is fine for role-play testing (rate-limited; Google may use free-tier data to improve its products). Use a paid key for anything beyond that.
+
+**OpenRouter (optional, for the notes step)**
+1. Create a key at **openrouter.ai/keys**.
+2. **Settings → OpenRouter key → Save key → Load models.** Models are tagged **FREE**, **PAID**, **AUDIO** (accepts audio) and **JSON** (supports structured output).
+3. Free models (e.g. DeepSeek) are limited to about 20 requests/minute and 50/day (1,000/day after a $10 credit top-up). Live mode uses roughly 3–6 requests per minute.
+
+**Two model slots**
+- **Speech model** — hears the audio. Must have the **AUDIO** tag (Gemini Flash works well for Nepali).
+- **Notes model** — either "same model (one step)" or any text model. In two-step mode the speech model writes a transcript and the notes model turns it into structured notes. This is where free text models such as DeepSeek fit.
+
+Tap **Test selected models** to check both. Keys are encrypted on the phone with the Android Keystore; requests go directly from the phone to Google / OpenRouter.
+
+There is no reliable free option that needs **no key at all**; both free routes above need a free account key.
 
 ## 3. Run a test consultation
 
@@ -48,7 +62,7 @@ Tips: say vitals aloud ("BP 150 by 95, SpO2 96"), say exam findings aloud, and s
 ## 4. How it works
 
 ```
-Mic → 20-second AAC segments ──(live mode)──► Gemini: "what is NEW in this segment?" (JSON)
+Mic → gap-free WAV segments (cut at pauses) ──► speech model (+ optional notes model): "what is NEW?" (JSON)
                          │                                │
                          │                                ▼
                          │                   Safety engine (pure Kotlin, no AI)
@@ -59,7 +73,7 @@ Mic → 20-second AAC segments ──(live mode)──► Gemini: "what is NEW i
                          │                     runs allergy / pregnancy / kidney / age /
                          │                     interaction / cumulative-paracetamol checks
                          ▼
-            End: all segments → Gemini final note → same engine → Review screen
+            End: full transcript → notes model writes final note → same engine → Review screen
 ```
 
 Key safety rules (all enforced in code and covered by tests):
@@ -75,7 +89,7 @@ Key safety rules (all enforced in code and covered by tests):
 |---|---|
 | `engine/src/main/resources/catalogues/v1/` | **All clinical content** (conditions, red flags, regimens, formulary, interactions). Review these JSON files clinically. |
 | `engine/src/main/kotlin/` | Safety engine: reducer, safety checks, Nepali instruction templates, prompt + schema builder. No dependencies. |
-| `engine/src/test/kotlin/` | 38 tests incl. catalogue integrity and a randomized "AI can never loosen safety" check. |
+| `engine/src/test/kotlin/` | 41 tests incl. catalogue integrity and a randomized "AI can never loosen safety" check. |
 | `app/` | Android app (Kotlin + Jetpack Compose). |
 | `.github/workflows/build.yml` | Runs the tests, builds the APK, publishes it as a Release. |
 | `keystore/testing.jks` | **Test-only** signing key so updates install over each other. Never use for a published app. |
@@ -83,7 +97,6 @@ Key safety rules (all enforced in code and covered by tests):
 ## 6. Known limitations of this prototype
 
 - Recording only works while the app is open on screen (no background recording service yet).
-- Switching between 20-second segments can drop a fraction of a second of audio.
 - No patient records are saved; starting a new consultation deletes the previous audio.
 - No PDF / thermal printing yet (Share as text only).
 - The catalogue covers 14 adult OPD conditions. Children, pregnancy-specific care and emergencies are out of scope.

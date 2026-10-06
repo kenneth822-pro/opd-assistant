@@ -59,7 +59,7 @@ object Prompts {
 
     private val RULES = """
         RULES
-        1. Report ONLY what is said in the audio you are given. Do not repeat facts already listed in CASE SO FAR. If nothing new was said, return empty arrays.
+        1. Report ONLY what is said in the NEW segment you are given (audio or transcript). Do not repeat facts already listed in CASE SO FAR. If nothing new was said, return empty arrays.
         2. new_symptoms / new_negatives: short English clinical names. evidence = short verbatim quote in the original script (max 15 words).
         3. explored_question_ids: include a question only if it was asked AND answered. Use only the listed IDs for that condition.
         4. red_flags_identified: status "confirmed" when the patient/attendant clearly affirms it; "suspected" when unclear or second-hand.
@@ -72,26 +72,68 @@ object Prompts {
         10. exam_findings: only examination findings the doctor said aloud. Never invent examination findings.
         11. follow_up_visit = true if this is clearly a follow-up of a known chronic condition (e.g. "औषधि सकियो", "रिपोर्ट देखाउन आएँ").
         12. You never diagnose beyond the listed codes, never choose medicines and never write patient instructions. The app's safety engine does that.
-        13. transcript: brief lines with speaker (doctor/patient/attendant/unknown) and slice_offset_ms from the start of the audio you received.
+        13. transcript: when you receive AUDIO, give brief lines with speaker (doctor/patient/attendant/unknown) and slice_offset_ms from the start of that audio. When you receive a TRANSCRIPT, return an empty transcript array.
+        14. A machine transcript may contain recognition errors. If a word is clearly a misheard drug or symptom, use the sensible reading; if unsure, leave it out.
     """.trimIndent()
 
-    fun liveSystemPrompt(c: Catalogues): String = """
-        You are a careful clinical scribe listening to an outpatient (OPD) consultation in Nepal.
-        Speech may be Nepali, English, code-switched, or occasionally Maithili/Bhojpuri. Attendants often answer for the patient.
-        You receive ONE short consecutive audio segment plus a summary of the case so far.
-        Return ONLY JSON matching the schema, describing what is NEW in this segment.
+    fun liveSystemPrompt(c: Catalogues, fromTranscript: Boolean = false): String {
+        val input = if (fromTranscript)
+            "You receive the machine TRANSCRIPT of ONE short new segment of the conversation plus a summary of the case so far."
+        else
+            "You receive ONE short consecutive AUDIO segment plus a summary of the case so far."
+        return """
+            You are a careful clinical scribe following an outpatient (OPD) consultation in Nepal.
+            Speech may be Nepali, English, code-switched, or occasionally Maithili/Bhojpuri. Attendants often answer for the patient.
+            $input
+            Return ONLY JSON matching the schema, describing what is NEW in this segment.
 
-    """.trimIndent() + "\n" + RULES + "\n\n" + reference(c)
+        """.trimIndent() + "\n" + RULES + "\n\n" + reference(c)
+    }
 
+    /** The final note is written from the full transcript (text), so it works with any text model. */
     fun finalSystemPrompt(c: Catalogues): String = """
-        You are a careful clinical scribe. You receive the COMPLETE audio of an outpatient consultation in Nepal,
-        split into consecutive segments in order, plus a summary of what the app captured live (it may be empty or incomplete).
+        You are a careful clinical scribe. You receive the COMPLETE machine transcript of an outpatient consultation in Nepal
+        (speaker-labelled, may contain recognition errors) plus a summary of what the app captured live (may be empty or incomplete).
         Return ONLY JSON with:
         (a) soap: a concise note in English. exam_spoken must be "Not verbalized during consultation" unless the doctor said findings aloud.
             plan_spoken/advice_spoken: only what the doctor actually said. Do not add your own plan.
-        (b) case_delta: everything clinically relevant from the WHOLE consultation that is missing from the live summary, using the same rules below.
+        (b) case_delta: everything clinically relevant from the WHOLE consultation that is missing from the live summary,
+            using the same rules below. Leave case_delta.transcript empty.
 
     """.trimIndent() + "\n" + RULES + "\n\n" + reference(c)
+
+    /* ---------------------------- transcription (speech step) ---------------------------- */
+
+    fun transcriptionSystemPrompt(): String = """
+        You transcribe short audio segments of an outpatient consultation in Nepal.
+        - Write Nepali in Devanagari script and English words (drug names, medical terms, numbers) in Latin script, exactly as spoken. Do not translate.
+        - Label each turn with speaker: doctor, patient, attendant (a relative answering for the patient) or unknown.
+        - slice_offset_ms is the approximate start of the turn from the beginning of THIS audio segment.
+        - Write numbers as digits (e.g. "BP 150 by 95").
+        - If there is no speech, return an empty lines array. Never invent words that were not spoken.
+        Return ONLY JSON matching the schema.
+    """.trimIndent()
+
+    fun transcriptionSchema(): J.Obj = obj(
+        linkedMapOf(
+            "lines" to arr(obj(linkedMapOf(
+                "speaker" to str(listOf("doctor", "patient", "attendant", "unknown")),
+                "text" to str(),
+                "slice_offset_ms" to int()
+            ), listOf("speaker", "text")))
+        ),
+        listOf("lines")
+    )
+
+    fun parseTranscription(text: String): List<TranscriptLine> {
+        val o = J.parse(extractJson(text)) as? J.Obj ?: throw JsonException("Transcription is not a JSON object")
+        return o.objs("lines").map {
+            TranscriptLine(it.strOr("speaker", "unknown"), it.strOr("text", "").trim(), (it.dbl("slice_offset_ms") ?: 0.0).toLong())
+        }.filter { it.text.isNotEmpty() }
+    }
+
+    fun transcriptText(lines: List<TranscriptLine>): String =
+        if (lines.isEmpty()) "(no speech)" else lines.joinToString("\n") { "${it.speaker}: ${it.text}" }
 
     fun caseSummary(s: CaseState, c: Catalogues, recentLines: Int = 10): String {
         val sb = StringBuilder("CASE SO FAR\n")
@@ -204,12 +246,41 @@ object Prompts {
         listOf("soap", "case_delta")
     )
 
+    /** Converts the Gemini (OpenAPI-style, upper-case types) schema into standard JSON Schema for other providers. */
+    fun toJsonSchema(schema: J.Obj): J.Obj {
+        val out = LinkedHashMap<String, J>()
+        for ((k, v) in schema.fields) {
+            out[k] = when {
+                k == "type" && v is J.Str -> J.Str(v.v.lowercase())
+                k == "properties" && v is J.Obj -> J.Obj(LinkedHashMap<String, J>().also { m ->
+                    v.fields.forEach { (pk, pv) -> m[pk] = if (pv is J.Obj) toJsonSchema(pv) else pv }
+                })
+                k == "items" && v is J.Obj -> toJsonSchema(v)
+                else -> v
+            }
+        }
+        return J.Obj(out)
+    }
+
+    /**
+     * Pulls the JSON object out of a model reply: removes <think>...</think> reasoning,
+     * markdown fences and any text before the first '{' or after the last '}'.
+     */
+    fun extractJson(text: String): String {
+        var t = text.replace(Regex("(?s)<think>.*?</think>"), "")
+        t = J.stripFences(t)
+        val start = t.indexOf('{')
+        val end = t.lastIndexOf('}')
+        return if (start >= 0 && end > start) t.substring(start, end + 1) else t
+    }
+
     /* ---------------------------- parsing ---------------------------- */
 
-    fun parseDelta(text: String): LiveDelta = deltaFrom(J.parse(text) as? J.Obj ?: throw JsonException("Response is not a JSON object"))
+    fun parseDelta(text: String): LiveDelta =
+        deltaFrom(J.parse(extractJson(text)) as? J.Obj ?: throw JsonException("Response is not a JSON object"))
 
     fun parseFinal(text: String): FinalResult {
-        val o = J.parse(text) as? J.Obj ?: throw JsonException("Response is not a JSON object")
+        val o = J.parse(extractJson(text)) as? J.Obj ?: throw JsonException("Response is not a JSON object")
         val s = o.obj("soap")
         val soap = SoapNote(
             chiefComplaint = s?.str("chief_complaint") ?: "",

@@ -63,6 +63,32 @@ class EngineTest {
         assertEquals(21_200L, s.transcript.first().offsetMs)
     }
 
+    @Test
+    fun extractsJsonFromReasoningModelReplies() {
+        val reply = "<think>The patient said black stool {not json}</think>\nHere you go:\n```json\n{\"lines\":[{\"speaker\":\"patient\",\"text\":\"कालो दिसा\"},{\"speaker\":\"doctor\",\"text\":\"  \"}]}\n```\nDone."
+        val lines = Prompts.parseTranscription(reply)
+        assertEquals(1, lines.size)
+        assertEquals("patient: कालो दिसा", Prompts.transcriptText(lines))
+        assertEquals("(no speech)", Prompts.transcriptText(emptyList()))
+    }
+
+    @Test
+    fun schemaConvertsToStandardJsonSchema() {
+        val std = Prompts.toJsonSchema(Prompts.finalSchema(c)).toJson()
+        assertFalse(std.contains("\"OBJECT\"") || std.contains("\"STRING\"") || std.contains("\"ARRAY\""))
+        assertTrue(std.contains("\"type\":\"object\""))
+        assertTrue(std.contains("COND_APD"))   // enums survive
+        val t = Prompts.toJsonSchema(Prompts.transcriptionSchema()).toJson()
+        assertTrue(t.contains("\"required\":[\"lines\"]"))
+    }
+
+    @Test
+    fun transcriptModePromptsDifferFromAudioMode() {
+        assertTrue(Prompts.liveSystemPrompt(c, fromTranscript = true).contains("TRANSCRIPT of ONE short new segment"))
+        assertTrue(Prompts.liveSystemPrompt(c).contains("AUDIO segment"))
+        assertTrue(Prompts.finalSystemPrompt(c).contains("COMPLETE machine transcript"))
+    }
+
     /* ---------------- review round 7, issue 1: session-level red flags ---------------- */
 
     @Test

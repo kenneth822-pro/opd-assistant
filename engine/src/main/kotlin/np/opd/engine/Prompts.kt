@@ -75,11 +75,12 @@ object Prompts {
         9. plan_cue.detected = true when the doctor signals moving to treatment ("अब औषधि लेखिदिन्छु", "I'll write your medicines"). dictation_cue.detected = true when the doctor says specific drug names/doses as a prescription; then list each drug in dictated_items exactly as said (Latin letters).
         10. exam_findings: only examination findings the doctor said aloud. Never invent examination findings.
         11. follow_up_visit = true if this is clearly a follow-up of a known chronic condition (e.g. "औषधि सकियो", "रिपोर्ट देखाउन आएँ").
-        12. You never diagnose beyond the listed codes, never choose medicines and never write patient instructions. The app's safety engine does that.
+        12. In problems use only the listed condition codes (COND_OTHER + free_label for anything else). You never choose medicines and never write patient instructions. The app's safety engine does that.
         13. transcript: when you receive AUDIO, give brief lines with speaker (doctor/patient/attendant/unknown) and slice_offset_ms from the start of that audio. When you receive a TRANSCRIPT, return an empty transcript array.
         14. A machine transcript may contain recognition errors and speakers may be "unknown"; infer who is speaking from context. If a word is clearly a misheard drug or symptom, use the sensible reading; if unsure, leave it out.
         15. next_questions: up to 3 short questions the doctor has NOT yet asked that would help most right now. Put questions that rule out dangerous causes (red flags) first, then missing checklist questions, then anything else important (duration, severity, medicines already taken, allergies). Give each in simple Nepali (Devanagari) and English, with a few words on why.
         16. Always fill problems with the condition(s) being discussed, even if you only add explored questions or negatives for them.
+        17. differential: your CURRENT working differential diagnosis for the WHOLE case so far (not only the new part). Give up to 4 diagnoses the doctor should consider, most likely first (likelihood "likely" or "possible"), then at most 2 dangerous diagnoses that are not yet ruled out (likelihood "must_not_miss"). reason = a few words citing what was said or measured. Set condition_code only when a listed code fits; otherwise leave it empty. Base it only on what was said or measured and do not speculate beyond it. If no symptom has been described yet, return an empty array. It is a suggestion for the doctor: it never changes the protocol, the safety checks or the medicines.
     """.trimIndent()
 
     fun liveSystemPrompt(c: Catalogues, fromTranscript: Boolean = false): String {
@@ -160,6 +161,9 @@ object Prompts {
         if (s.comorbidities.isNotEmpty()) sb.appendLine("Comorbidities: " + s.comorbidities.joinToString(", "))
         if (s.currentMeds.isNotEmpty()) sb.appendLine("Current medicines: " + s.currentMeds.joinToString(", ") { it.stated })
         if (s.dictated.isNotEmpty()) sb.appendLine("Dictated so far: " + s.dictated.joinToString(", ") { it.stated })
+        if (s.aiDifferential.isNotEmpty())
+            sb.appendLine("Your differential so far (revise it if new information changes it): " +
+                s.aiDifferential.joinToString("; ") { "${it.name} (${it.likelihood.name.lowercase()})" })
         val recent = s.transcript.takeLast(recentLines)
         if (recent.isNotEmpty()) {
             sb.appendLine("Recent transcript:")
@@ -231,7 +235,13 @@ object Prompts {
                 ), listOf("drug_stated"))),
                 "exam_findings" to arr(str()),
                 "follow_up_visit" to bool(),
-                "next_questions" to arr(obj(linkedMapOf("ne" to str(), "en" to str(), "reason" to str()), listOf("en")))
+                "next_questions" to arr(obj(linkedMapOf("ne" to str(), "en" to str(), "reason" to str()), listOf("en"))),
+                "differential" to arr(obj(linkedMapOf(
+                    "name" to str(),
+                    "likelihood" to str(listOf("likely", "possible", "must_not_miss")),
+                    "reason" to str(),
+                    "condition_code" to str()
+                ), listOf("name", "likelihood")))
             ),
             listOf("transcript", "problems", "red_flags_identified", "red_flags_excluded")
         )
@@ -373,7 +383,22 @@ object Prompts {
             comorbidities = o.strs("comorbidities"),
             currentMeds = o.objs("current_meds").map { MedInput(it.strOr("stated", ""), it.dbl("daily_dose_mg")) },
             examFindings = o.strs("exam_findings"),
-            nextQuestions = o.objs("next_questions").map { AiQuestion(it.strOr("ne", ""), it.strOr("en", ""), it.strOr("reason", "")) }
+            nextQuestions = o.objs("next_questions").map { AiQuestion(it.strOr("ne", ""), it.strOr("en", ""), it.strOr("reason", "")) },
+            differential = o.objs("differential").map {
+                AiDiagnosis(
+                    name = it.strOr("name", ""),
+                    likelihood = aiLikelihood(it.str("likelihood")),
+                    reason = it.strOr("reason", ""),
+                    conditionCode = it.str("condition_code")?.takeIf { code -> code.isNotBlank() }
+                )
+            }
         )
+    }
+
+    /** Unknown wording is treated as POSSIBLE: the AI can never promote a diagnosis by being vague. */
+    private fun aiLikelihood(text: String?): AiLikelihood = when (text?.trim()?.lowercase()?.replace(' ', '_')?.replace('-', '_')) {
+        "likely", "probable" -> AiLikelihood.LIKELY
+        "must_not_miss", "dangerous", "cannot_miss", "red_flag" -> AiLikelihood.MUST_NOT_MISS
+        else -> AiLikelihood.POSSIBLE
     }
 }

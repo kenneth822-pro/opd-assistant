@@ -230,6 +230,12 @@ object Reducer {
             examFindings = exam,
             aiNextQuestions = d.nextQuestions.filter { it.en.isNotBlank() || it.ne.isNotBlank() }.take(3)
                 .ifEmpty { state.aiNextQuestions },
+            aiDifferential = d.differential
+                .filter { it.name.isNotBlank() }
+                .map { it.copy(name = it.name.trim(), conditionCode = it.conditionCode?.trim()?.uppercase()?.takeIf { code -> c.conditions[code] != null }) }
+                .distinctBy { it.name.lowercase() }
+                .take(6)
+                .ifEmpty { state.aiDifferential },
             counter = counter,
             audit = audit
         )
@@ -377,11 +383,20 @@ object Reducer {
         val demo = s.demographics
         val pregCheck = demo.pregnancy == Pregnancy.UNKNOWN && demo.gender == Gender.FEMALE && (demo.age == null || demo.age in 12..50)
 
+        val scope = buildList {
+            val age = demo.age
+            if (age != null && age < ADULT_AGE) add(
+                "Under 18 (age $age): the protocols here are written for adults. Medicines are only suggested where the " +
+                    "protocol allows this age; always check the dose for age and weight."
+            )
+        }
+
         return s1.copy(
             problems = problems,
             sessionLevel = level,
             sessionAlerts = alerts.sortedByDescending { it.first.ordinal }.map { it.second }.distinct(),
-            pregnancyCheckNeeded = pregCheck
+            pregnancyCheckNeeded = pregCheck,
+            scopeAlerts = scope
         )
     }
 
@@ -519,6 +534,9 @@ object Reducer {
 
     const val OTHER = "COND_OTHER"
 
+    /** Protocol regimens are written for adults; a regimen must declare a lower min_age explicitly to be offered below this. */
+    const val ADULT_AGE = 18
+
     private fun eligibilityProblem(r: RegimenDef, s: CaseState, c: Catalogues): String? {
         val e = r.eligibility
         if (e.genders.isNotEmpty()) {
@@ -528,7 +546,9 @@ object Reducer {
         }
         val age = s.demographics.age
         if (age != null) {
-            e.minAge?.let { if (age < it) return "not for age below $it" }
+            // The catalogue is adult-only unless a regimen explicitly declares a lower minimum age.
+            val minAge = e.minAge ?: ADULT_AGE
+            if (age < minAge) return "not for age below $minAge"
             e.maxAge?.let { if (age > it) return "not for age above $it" }
         }
         if (e.requiresAny.isNotEmpty()) {

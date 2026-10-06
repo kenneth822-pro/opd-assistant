@@ -151,6 +151,8 @@ object Safety {
             // Age
             val age = demo.age
             if (age != null && age >= 65 && d.elderlyCaution != null) add(Severity.WARNING, "Age $age: ${d.elderlyCaution} ($name).")
+            if (age == null) add(Severity.CAUTION, "Age not recorded: adult doses are assumed.")
+            else if (age < Reducer.ADULT_AGE) add(Severity.CAUTION, "Under 18 (age $age): weight-based paediatric dosing applies; check the dose of $name.")
 
             // NSAID context
             if ("NSAID" in d.classes) {

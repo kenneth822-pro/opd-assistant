@@ -43,6 +43,71 @@ data class Rule(
 data class QuestionDef(val id: String, val promptEn: String, val promptNe: String)
 data class VisitChecklist(val minQuestions: Int, val questions: List<QuestionDef>)
 
+/**
+ * How far a catalogue entry has been checked. Only a person can set CLINICIAN_VERIFIED;
+ * SOURCE_MATCHED means the entry was transcribed from a guideline document that was actually
+ * retrieved (and cites the section), pending a clinician's sign-off.
+ */
+enum class Verification {
+    UNVERIFIED, SOURCE_MATCHED, CLINICIAN_VERIFIED;
+
+    companion object {
+        /** Unknown or missing text is treated as UNVERIFIED, never as verified. */
+        fun parse(text: String?): Verification =
+            entries.firstOrNull { it.name == text?.trim()?.uppercase() } ?: UNVERIFIED
+    }
+}
+
+/** A guideline document the catalogue is meant to be checked against. [retrieved] = its text was actually read. */
+data class ReferenceDoc(
+    val id: String,
+    val title: String,
+    val publisher: String,
+    val year: String,
+    val url: String,
+    val retrieved: Boolean
+)
+
+/** Where one catalogue entry comes from: document id (see [ReferenceDoc]), section and page. */
+data class SourceRef(
+    val document: String,
+    val section: String,
+    val page: String? = null,
+    val note: String? = null,
+    val verifiedBy: String? = null,
+    val verifiedOn: String? = null
+) {
+    companion object {
+        fun from(o: J.Obj?): SourceRef? {
+            if (o == null) return null
+            return SourceRef(
+                document = o.strOr("document", ""),
+                section = o.strOr("section", ""),
+                page = o.str("page"),
+                note = o.str("note"),
+                verifiedBy = o.str("verified_by"),
+                verifiedOn = o.str("verified_on")
+            )
+        }
+    }
+}
+
+/**
+ * One piece of evidence for (points > 0) or against (points < 0) a diagnosis, used only to rank the
+ * on-phone differential. Exactly one trigger is set: a vitals/age [rule], a known [comorbidity],
+ * a [medClass] (drug class or drug id the patient already takes) or a [gender].
+ */
+data class DiagnosticClue(
+    val label: String,
+    val points: Int,
+    val rule: Rule? = null,
+    val comorbidity: String? = null,
+    val medClass: String? = null,
+    val gender: String? = null
+) {
+    fun triggers(): Int = listOfNotNull(rule, comorbidity, medClass, gender).size
+}
+
 data class ScoreComponent(
     val id: String,
     val label: String,
@@ -64,7 +129,11 @@ data class ConditionDef(
     val linkedRegimens: List<String>,
     val linkedInvestigations: List<String>,
     /** Nepali/English words that suggest this condition in a transcript (on-device hints). */
-    val keywords: List<String> = emptyList()
+    val keywords: List<String> = emptyList(),
+    /** Evidence that raises or lowers this condition in the on-phone differential (display only). */
+    val clues: List<DiagnosticClue> = emptyList(),
+    val source: SourceRef? = null,
+    val verification: Verification = Verification.UNVERIFIED
 ) {
     fun allQuestionIds(): Set<String> = visitTypes.values.flatMap { v -> v.questions.map { it.id } }.toSet()
     fun checklist(visitType: String): VisitChecklist? = visitTypes[visitType] ?: visitTypes["INITIAL"]
@@ -80,7 +149,9 @@ data class RedFlagDef(
     val disposition: Disposition,
     val derivationRule: Rule?,
     val redirectTo: String?,
-    val keywords: List<String> = emptyList()
+    val keywords: List<String> = emptyList(),
+    /** The dangerous diagnosis this flag points to, shown under "Don't miss" (falls back to [label]). */
+    val implies: String? = null
 )
 
 data class DrugDef(
@@ -130,8 +201,11 @@ data class RegimenDef(
     val label: String,
     val components: List<RegimenComponent>,
     val eligibility: Eligibility,
-    val verificationStatus: String
-)
+    val verificationStatus: String,
+    val source: SourceRef? = null
+) {
+    val verification: Verification get() = Verification.parse(verificationStatus)
+}
 
 data class AllergyRule(
     val code: String,
@@ -155,8 +229,28 @@ class Catalogues(
     val allergies: Map<String, AllergyRule>,
     val comorbidities: Map<String, String>,
     val interactions: List<InteractionRule>,
-    val investigations: Map<String, InvestigationDef>
+    val investigations: Map<String, InvestigationDef>,
+    val referenceDocs: Map<String, ReferenceDoc> = emptyMap()
 ) {
+    data class Counts(val total: Int, val sourceMatched: Int, val clinicianVerified: Int) {
+        val unverified: Int get() = total - sourceMatched - clinicianVerified
+    }
+
+    /** How much of the catalogue has been checked against a source. Shown in the app so nobody assumes more. */
+    data class VerificationSummary(val conditions: Counts, val regimens: Counts, val documentsRetrieved: Int, val documentsListed: Int)
+
+    fun verification(): VerificationSummary {
+        fun counts(v: List<Verification>) = Counts(
+            v.size, v.count { it == Verification.SOURCE_MATCHED }, v.count { it == Verification.CLINICIAN_VERIFIED }
+        )
+        return VerificationSummary(
+            conditions = counts(conditions.values.map { it.verification }),
+            regimens = counts(regimens.values.map { it.verification }),
+            documentsRetrieved = referenceDocs.values.count { it.retrieved },
+            documentsListed = referenceDocs.size
+        )
+    }
+
     /** Find a formulary drug from free text ("Tab Pantop 40", "ibuprofen 400mg"). Longest match wins. */
     fun findDrug(text: String?): DrugDef? {
         if (text.isNullOrBlank()) return null
@@ -235,7 +329,19 @@ class Catalogues(
                     score = score,
                     linkedRegimens = c.strs("linked_regimens"),
                     linkedInvestigations = c.strs("linked_investigations"),
-                    keywords = c.strs("keywords").map { it.lowercase() }
+                    keywords = c.strs("keywords").map { it.lowercase() },
+                    clues = c.objs("diagnostic_clues").map {
+                        DiagnosticClue(
+                            label = it.req("label"),
+                            points = it.int("points") ?: 0,
+                            rule = Rule.from(it.obj("rule")),
+                            comorbidity = it.str("comorbidity"),
+                            medClass = it.str("med_class"),
+                            gender = it.str("gender")
+                        )
+                    },
+                    source = SourceRef.from(c.obj("source")),
+                    verification = Verification.parse(c.str("verification_status"))
                 )
             }
 
@@ -252,7 +358,8 @@ class Catalogues(
                     disposition = Disposition.valueOf(f.strOr("disposition", "OPD_TREAT")),
                     derivationRule = Rule.from(f.obj("derivation_rule")),
                     redirectTo = f.str("redirect_to_condition"),
-                    keywords = f.strs("keywords").map { it.lowercase() }
+                    keywords = f.strs("keywords").map { it.lowercase() },
+                    implies = f.str("implies")
                 )
             }
 
@@ -285,7 +392,8 @@ class Catalogues(
                         maxAge = el.int("max_age"),
                         requiresAny = el.strs("requires_any")
                     ),
-                    verificationStatus = r.strOr("verification_status", "UNVERIFIED")
+                    verificationStatus = r.strOr("verification_status", "UNVERIFIED"),
+                    source = SourceRef.from(r.obj("source"))
                 )
             }
 
@@ -327,6 +435,19 @@ class Catalogues(
             val investigations = LinkedHashMap<String, InvestigationDef>()
             for (i in vj.objs("investigations")) investigations[i.req("id")] = InvestigationDef(i.req("id"), i.strOr("name", i.req("id")))
 
+            val docs = LinkedHashMap<String, ReferenceDoc>()
+            for (d in cj.objs("reference_documents")) {
+                val id = d.req("id")
+                docs[id] = ReferenceDoc(
+                    id = id,
+                    title = d.strOr("title", id),
+                    publisher = d.strOr("publisher", ""),
+                    year = d.strOr("year", ""),
+                    url = d.strOr("url", ""),
+                    retrieved = d.bool("retrieved") ?: false
+                )
+            }
+
             return Catalogues(
                 version = cj.strOr("version", "?"),
                 conditions = conditions,
@@ -336,7 +457,8 @@ class Catalogues(
                 allergies = allergies,
                 comorbidities = comorbidities,
                 interactions = interactions,
-                investigations = investigations
+                investigations = investigations,
+                referenceDocs = docs
             )
         }
     }
@@ -351,6 +473,23 @@ object CatalogueIntegrity {
 
     fun check(c: Catalogues): List<String> {
         val errors = mutableListOf<String>()
+        val allClasses = c.drugs.values.flatMap { it.classes }.toSet()
+
+        /** An entry may never claim more verification than its evidence supports. */
+        fun provenance(where: String, v: Verification, src: SourceRef?) {
+            val doc = src?.let { c.referenceDocs[it.document] }
+            if (src != null) {
+                if (doc == null) errors += "$where: source cites unregistered document '${src.document}'"
+                if (src.section.isBlank()) errors += "$where: source needs a section"
+            }
+            if (v != Verification.UNVERIFIED) {
+                if (src == null) errors += "$where: $v needs a source citation"
+                else if (doc != null && !doc.retrieved) errors += "$where: $v but document '${doc.id}' was never retrieved"
+            }
+            if (v == Verification.CLINICIAN_VERIFIED && (src?.verifiedBy.isNullOrBlank() || src?.verifiedOn.isNullOrBlank()))
+                errors += "$where: CLINICIAN_VERIFIED needs verified_by and verified_on"
+        }
+
         fun ruleErrors(where: String, r: Rule?) {
             if (r == null) return
             if (r.compositeOp != null) {
@@ -391,15 +530,32 @@ object CatalogueIntegrity {
             }
             for (inv in cond.linkedInvestigations) if (c.investigations[inv] == null) errors += "${cond.code}: missing investigation $inv"
             if (cond.keywords.isEmpty()) errors += "${cond.code}: needs keywords for on-device hints"
+            provenance(cond.code, cond.verification, cond.source)
+            for (cl in cond.clues) {
+                val where = "${cond.code}/clue '${cl.label}'"
+                if (cl.points == 0 || cl.points !in -5..6) errors += "$where: points must be non-zero and between -5 and 6"
+                if (cl.triggers() != 1) errors += "$where: needs exactly one of rule / comorbidity / med_class / gender"
+                ruleErrors(where, cl.rule)
+                cl.comorbidity?.let { if (c.comorbidities[it] == null) errors += "$where: unknown comorbidity $it" }
+                cl.medClass?.let { tok ->
+                    if (tok.startsWith("DRUG_")) { if (c.drugs[tok] == null) errors += "$where: unknown drug $tok" }
+                    else if (tok !in allClasses) errors += "$where: unknown drug class $tok"
+                }
+                cl.gender?.let { if (it !in setOf("MALE", "FEMALE")) errors += "$where: gender must be MALE or FEMALE" }
+            }
         }
+        for (d in c.referenceDocs.values) if (d.title.isBlank() || d.url.isBlank()) errors += "reference document ${d.id}: needs a title and url"
         for (f in c.redFlags.values) {
             ruleErrors("flag ${f.id}", f.derivationRule)
             if (f.kind == FlagKind.REDIRECT && (f.redirectTo == null || c.conditions[f.redirectTo] == null))
                 errors += "flag ${f.id}: redirect target '${f.redirectTo}' missing"
             if (f.kind != FlagKind.REDIRECT && f.redirectTo != null) errors += "flag ${f.id}: only REDIRECT flags may redirect"
             if (f.derivationRule == null && f.keywords.isEmpty()) errors += "flag ${f.id}: conversational flag needs keywords"
+            if (f.kind == FlagKind.REDIRECT && f.implies != null) errors += "flag ${f.id}: a redirect flag cannot imply a dangerous diagnosis"
         }
         for (r in c.regimens.values) {
+            if (r.verificationStatus.trim().uppercase() !in Verification.entries.map { it.name }) errors += "regimen ${r.id}: bad verification_status '${r.verificationStatus}'"
+            provenance("regimen ${r.id}", r.verification, r.source)
             if (c.conditions[r.conditionCode] == null) errors += "regimen ${r.id}: unknown condition ${r.conditionCode}"
             if (c.conditions.values.none { r.id in it.linkedRegimens }) errors += "regimen ${r.id}: not linked from any condition"
             if (r.components.isEmpty()) errors += "regimen ${r.id}: no components"
@@ -414,7 +570,6 @@ object CatalogueIntegrity {
                 if (c.comorbidities[req] == null && c.conditions[req] == null) errors += "regimen ${r.id}: requires unknown code $req"
             }
         }
-        val allClasses = c.drugs.values.flatMap { it.classes }.toSet()
         for (a in c.allergies.values) {
             for (cl in a.blockedClasses + a.cautionClasses) {
                 if (cl !in allClasses && cl != "SULFONAMIDE_ANTIBIOTIC") errors += "allergy ${a.code}: class $cl not used by any drug"

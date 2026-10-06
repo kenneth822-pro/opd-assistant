@@ -1,6 +1,40 @@
 {
   "version": "1.0.0",
   "note": "PROTOTYPE CONTENT - clinically UNVERIFIED. Checklists, red flags and regimen links must be reviewed by a clinician.",
+  "reference_documents": [
+    {
+      "id": "STP_BHS_2078",
+      "title": "Standard Treatment Protocol (STP) for Basic Health Services (BHS) Package 2078",
+      "publisher": "Ministry of Health and Population, Department of Health Services, Curative Service Division",
+      "year": "2078 BS (2021/22)",
+      "url": "https://csd.dohs.gov.np/downloadsfiles/BHS_STP_Final-Pdf_CSD-(1)-1658727034.pdf",
+      "retrieved": false
+    },
+    {
+      "id": "STP_EMERGENCY_2078",
+      "title": "Standard Treatment Protocol of Emergency Health Service Package 2078",
+      "publisher": "Government of Nepal, Ministry of Health and Population",
+      "year": "2078 BS (2021/22)",
+      "url": "https://cdn.who.int/media/docs/default-source/nepal-documents/hss_nepal/standard-treatment-protocol-of-emergency-health-service-package.pdf",
+      "retrieved": false
+    },
+    {
+      "id": "NLEM_2021",
+      "title": "National List of Essential Medicines Nepal, sixth revision 2021",
+      "publisher": "Government of Nepal",
+      "year": "2021",
+      "url": "https://cdn.who.int/media/docs/default-source/nepal-documents/hss_nepal/national-list-of-essential-medicines-nepal-sixth-revision-2021.pdf",
+      "retrieved": false
+    },
+    {
+      "id": "NATG_NEPAL",
+      "title": "National Antibiotic Treatment Guidelines (Nepal)",
+      "publisher": "Ministry of Health and Population",
+      "year": "edition to be confirmed",
+      "url": "https://www.medbox.org/document/national-antibiotic-treatment-guideline-nepal",
+      "retrieved": false
+    }
+  ],
   "conditions": [
     {
       "condition_code": "COND_CHEST_PAIN",
@@ -57,6 +91,42 @@
         "छाती कस",
         "छाती च्याप",
         "छाती थिच"
+      ],
+      "diagnostic_clues": [
+        {
+          "label": "Age 40 or older",
+          "points": 1,
+          "rule": {
+            "field": "age",
+            "op": ">=",
+            "value": 40
+          }
+        },
+        {
+          "label": "Known heart disease",
+          "points": 2,
+          "comorbidity": "COMORB_IHD"
+        },
+        {
+          "label": "Diabetes",
+          "points": 1,
+          "comorbidity": "COMORB_T2DM"
+        },
+        {
+          "label": "Hypertension",
+          "points": 1,
+          "comorbidity": "COMORB_HTN"
+        },
+        {
+          "label": "Already on a statin",
+          "points": 1,
+          "med_class": "STATIN"
+        },
+        {
+          "label": "Already on aspirin / antiplatelet",
+          "points": 1,
+          "med_class": "ANTIPLATELET"
+        }
       ]
     },
     {
@@ -113,6 +183,28 @@
         "डकार",
         "छाती पोल",
         "पेट फुल"
+      ],
+      "diagnostic_clues": [
+        {
+          "label": "Takes painkillers (NSAIDs)",
+          "points": 2,
+          "med_class": "NSAID"
+        },
+        {
+          "label": "Past ulcer or GI bleed",
+          "points": 2,
+          "comorbidity": "COMORB_PUD"
+        },
+        {
+          "label": "Already on a PPI",
+          "points": 1,
+          "med_class": "PPI"
+        },
+        {
+          "label": "Already on an H2 blocker",
+          "points": 1,
+          "med_class": "H2RA"
+        }
       ]
     },
     {
@@ -196,6 +288,35 @@
         "खोकी",
         "खकार",
         "निमोनिया"
+      ],
+      "diagnostic_clues": [
+        {
+          "label": "Oxygen saturation below 94%",
+          "points": 2,
+          "rule": {
+            "field": "spo2",
+            "op": "<",
+            "value": 94
+          }
+        },
+        {
+          "label": "Respiratory rate 24 or more",
+          "points": 2,
+          "rule": {
+            "field": "rr",
+            "op": ">=",
+            "value": 24
+          }
+        },
+        {
+          "label": "Fever 100.4°F or more",
+          "points": 2,
+          "rule": {
+            "field": "temp_f",
+            "op": ">=",
+            "value": 100.4
+          }
+        }
       ]
     },
     {
@@ -255,6 +376,52 @@
         "high pressure",
         "प्रेसर",
         "रक्तचाप"
+      ],
+      "diagnostic_clues": [
+        {
+          "label": "BP 140/90 or higher",
+          "points": 3,
+          "rule": {
+            "composite_op": "OR",
+            "rules": [
+              {
+                "field": "bp_systolic",
+                "op": ">=",
+                "value": 140
+              },
+              {
+                "field": "bp_diastolic",
+                "op": ">=",
+                "value": 90
+              }
+            ]
+          }
+        },
+        {
+          "label": "Known hypertension",
+          "points": 3,
+          "comorbidity": "COMORB_HTN"
+        },
+        {
+          "label": "Already on an ARB",
+          "points": 2,
+          "med_class": "ARB"
+        },
+        {
+          "label": "Already on an ACE inhibitor",
+          "points": 2,
+          "med_class": "ACE_INHIBITOR"
+        },
+        {
+          "label": "Already on amlodipine-type BP tablet",
+          "points": 2,
+          "med_class": "CCB_DHP"
+        },
+        {
+          "label": "Already on a diuretic",
+          "points": 1,
+          "med_class": "DIURETIC"
+        }
       ]
     },
     {
@@ -322,6 +489,32 @@
         "सुगर",
         "मधुमेह",
         "चिनी रोग"
+      ],
+      "diagnostic_clues": [
+        {
+          "label": "Blood glucose 200 or more",
+          "points": 3,
+          "rule": {
+            "field": "blood_glucose",
+            "op": ">=",
+            "value": 200
+          }
+        },
+        {
+          "label": "Known diabetes",
+          "points": 3,
+          "comorbidity": "COMORB_T2DM"
+        },
+        {
+          "label": "Already on metformin",
+          "points": 3,
+          "med_class": "BIGUANIDE"
+        },
+        {
+          "label": "Already on a sulfonylurea",
+          "points": 3,
+          "med_class": "SULFONYLUREA"
+        }
       ]
     },
     {
@@ -466,6 +659,17 @@
         "fever",
         "टाइफाइड",
         "ज्वरो"
+      ],
+      "diagnostic_clues": [
+        {
+          "label": "Fever 100.4°F or more",
+          "points": 2,
+          "rule": {
+            "field": "temp_f",
+            "op": ">=",
+            "value": 100.4
+          }
+        }
       ]
     },
     {
@@ -515,6 +719,31 @@
         "चुरोट",
         "बिँडी",
         "सास बढ"
+      ],
+      "diagnostic_clues": [
+        {
+          "label": "Age 40 or older",
+          "points": 1,
+          "rule": {
+            "field": "age",
+            "op": ">=",
+            "value": 40
+          }
+        },
+        {
+          "label": "Known asthma / COPD",
+          "points": 2,
+          "comorbidity": "COMORB_ASTHMA_COPD"
+        },
+        {
+          "label": "Oxygen saturation below 94%",
+          "points": 1,
+          "rule": {
+            "field": "spo2",
+            "op": "<",
+            "value": 94
+          }
+        }
       ]
     },
     {
@@ -557,6 +786,23 @@
         "घ्यारघ्यार",
         "इन्हेलर",
         "दम"
+      ],
+      "diagnostic_clues": [
+        {
+          "label": "Known asthma / COPD",
+          "points": 2,
+          "comorbidity": "COMORB_ASTHMA_COPD"
+        },
+        {
+          "label": "Already on a steroid + LABA inhaler",
+          "points": 2,
+          "med_class": "LABA_ICS"
+        },
+        {
+          "label": "Already on a reliever inhaler",
+          "points": 2,
+          "med_class": "SABA"
+        }
       ]
     },
     {
@@ -726,6 +972,18 @@
         "पिसाब पोल",
         "पिसाब",
         "छिटो छिटो पिसाब"
+      ],
+      "diagnostic_clues": [
+        {
+          "label": "Female",
+          "points": 1,
+          "gender": "FEMALE"
+        },
+        {
+          "label": "Male (cystitis is less typical)",
+          "points": -1,
+          "gender": "MALE"
+        }
       ]
     }
   ]

@@ -18,7 +18,9 @@ object LocalAssist {
         val deniedFlags: List<Mention> = emptyList(),
         val ageGuess: Int? = null,
         val genderGuess: Gender? = null,
-        val genderEvidence: List<String> = emptyList()
+        val genderEvidence: List<String> = emptyList(),
+        /** Condition keywords the speakers explicitly denied ("खोकी छैन"): evidence AGAINST that condition. */
+        val deniedConditions: List<ConditionHint> = emptyList()
     )
 
     private val devanagariDigits = "०१२३४५६७८९"
@@ -93,16 +95,25 @@ object LocalAssist {
         if (lines.isEmpty()) return Hints()
         val normalized = lines.map { it.speaker to normalize(it.text) }
 
-        // Conditions: any speaker, affirmed mentions only
+        // Conditions: any speaker, affirmed mentions only (denied ones are kept separately, as evidence against)
         val condHits = LinkedHashMap<String, MutableSet<String>>()
+        val condDenied = LinkedHashMap<String, MutableSet<String>>()
         for ((_, text) in normalized) {
             for (cond in c.conditions.values) for (k in cond.keywords) {
-                if (occurrences(text, k).any { !isNegated(text, it) }) condHits.getOrPut(cond.code) { linkedSetOf() } += k
+                val found = occurrences(text, k)
+                if (found.isEmpty()) continue
+                if (found.any { !isNegated(text, it) }) condHits.getOrPut(cond.code) { linkedSetOf() } += k
+                else condDenied.getOrPut(cond.code) { linkedSetOf() } += k
             }
         }
         val conditions = condHits.entries
             .sortedByDescending { it.value.size }
             .map { ConditionHint(it.key, it.value.toList()) }
+        // A keyword affirmed anywhere in the conversation is not "denied", whatever else was said.
+        val deniedConditions = condDenied.mapNotNull { (code, ks) ->
+            val only = ks - (condHits[code] ?: emptySet())
+            if (only.isEmpty()) null else ConditionHint(code, only.toList())
+        }
 
         // Red flags: patient / attendant / unknown speakers (the doctor's questions are not mentions)
         val affirmed = LinkedHashMap<String, Mention>()
@@ -144,6 +155,6 @@ object LocalAssist {
             Gender.MALE -> mEvidence.distinct()
             else -> emptyList()
         }
-        return Hints(conditions, affirmed.values.toList(), denied.values.toList(), age, gender, evidence)
+        return Hints(conditions, affirmed.values.toList(), denied.values.toList(), age, gender, evidence, deniedConditions)
     }
 }

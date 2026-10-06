@@ -21,7 +21,8 @@
         "होस नभएको",
         "अलमल",
         "लठ्ठ"
-      ]
+      ],
+      "implies": "Sepsis or a brain cause (new confusion)"
     },
     {
       "id": "rf_rr_ge30",
@@ -35,7 +36,8 @@
         "field": "rr",
         "op": ">=",
         "value": 30
-      }
+      },
+      "implies": "Severe breathing difficulty"
     },
     {
       "id": "rf_hypotension",
@@ -59,7 +61,8 @@
             "value": 60
           }
         ]
-      }
+      },
+      "implies": "Shock or sepsis"
     },
     {
       "id": "rf_spo2_lt88",
@@ -73,7 +76,8 @@
         "field": "spo2",
         "op": "<",
         "value": 88
-      }
+      },
+      "implies": "Respiratory failure (very low oxygen)"
     },
     {
       "id": "rf_cp_rest_pain_20m",
@@ -90,7 +94,8 @@
         "आराम गर्दा पनि",
         "बसिरहँदा पनि",
         "सुतिरहँदा पनि"
-      ]
+      ],
+      "implies": "Acute coronary syndrome (heart attack)"
     },
     {
       "id": "rf_cp_syncope",
@@ -109,7 +114,8 @@
         "ढलेँ",
         "बेहोस भएँ",
         "रिँगटा लागेर"
-      ]
+      ],
+      "implies": "Acute coronary syndrome or a dangerous heart rhythm"
     },
     {
       "id": "rf_cp_diaphoresis",
@@ -124,7 +130,8 @@
         "cold sweat",
         "पसिना",
         "चिटचिट"
-      ]
+      ],
+      "implies": "Acute coronary syndrome (heart attack)"
     },
     {
       "id": "rf_gi_melena",
@@ -140,7 +147,8 @@
         "melena",
         "कालो दिसा",
         "अलकत्रा"
-      ]
+      ],
+      "implies": "Upper GI bleed"
     },
     {
       "id": "rf_gi_hematemesis",
@@ -156,7 +164,8 @@
         "रगत बान्ता",
         "बान्तामा रगत",
         "रगत छाद"
-      ]
+      ],
+      "implies": "Upper GI bleed"
     },
     {
       "id": "rf_gi_dysphagia",
@@ -173,7 +182,8 @@
         "निल्न गाह्रो",
         "निल्दा अड्कि",
         "घाँटीमा अड्कि"
-      ]
+      ],
+      "implies": "Oesophageal or stomach cancer (needs endoscopy)"
     },
     {
       "id": "rf_gi_weight_loss",
@@ -190,7 +200,8 @@
         "तौल घट",
         "दुब्लाएँ",
         "दुब्लाउँदै"
-      ]
+      ],
+      "implies": "Serious underlying illness (cancer, TB, diabetes ...)"
     },
     {
       "id": "rf_gi_blood_in_stool",
@@ -232,7 +243,8 @@
             "value": 120
           }
         ]
-      }
+      },
+      "implies": "Severe hypertension"
     },
     {
       "id": "rf_htn_emergency",
@@ -250,7 +262,8 @@
         "आँखा नदेख",
         "आँखा धमिलो",
         "एकातिर कमजोर"
-      ]
+      ],
+      "implies": "Hypertensive emergency"
     },
     {
       "id": "rf_dm_dka",
@@ -265,7 +278,8 @@
         "dka",
         "sugar very high",
         "सुगर धेरै बढेर"
-      ]
+      ],
+      "implies": "Diabetic ketoacidosis / hyperosmolar state"
     },
     {
       "id": "rf_dm_foot_infection",
@@ -282,7 +296,8 @@
         "खुट्टाको घाउ",
         "खुट्टा कालो",
         "पाकेको घाउ"
-      ]
+      ],
+      "implies": "Diabetic foot infection or gangrene"
     },
     {
       "id": "rf_age_severe_dehydration",
@@ -301,7 +316,8 @@
         "आँखा गडेको",
         "धेरै कमजोर",
         "लोलाउने"
-      ]
+      ],
+      "implies": "Severe dehydration or shock"
     },
     {
       "id": "rf_age_unable_to_drink",
@@ -320,7 +336,8 @@
         "पिउन सकेको छैन",
         "केही पनि टिक्दैन",
         "पानी पनि बान्ता"
-      ]
+      ],
+      "implies": "Dehydration that oral rehydration cannot correct"
     },
     {
       "id": "rf_acute_abdomen",
@@ -338,7 +355,8 @@
         "पेट कडा",
         "असह्य पेट दुख",
         "पेट धेरै दुख"
-      ]
+      ],
+      "implies": "Acute abdomen (perforation, obstruction, appendicitis ...)"
     },
     {
       "id": "rf_asth_cannot_complete_sentences",
@@ -354,7 +372,8 @@
         "can't finish sentence",
         "बोल्नै सक्दैन",
         "बोल्न सक्दैन"
-      ]
+      ],
+      "implies": "Severe asthma attack"
     },
     {
       "id": "rf_asth_silent_chest",
@@ -369,7 +388,8 @@
         "exhausted",
         "very tired breathing",
         "थाकेर"
-      ]
+      ],
+      "implies": "Life-threatening asthma"
     },
     {
       "id": "rf_ar_unilateral_bleed",
@@ -385,7 +405,8 @@
         "epistaxis",
         "नाकबाट रगत",
         "नाक फुट"
-      ]
+      ],
+      "implies": "Nasal tumour or other sinonasal disease"
     },
     {
       "id": "rf_lbp_bladder_bowel",
@@ -402,7 +423,8 @@
         "पिसाब रोक्न सक्दैन",
         "पिसाब आउँदैन",
         "दिसा रोक्न"
-      ]
+      ],
+      "implies": "Cauda equina syndrome (spinal cord compression)"
     },
     {
       "id": "rf_lbp_saddle_numbness",
@@ -418,7 +440,8 @@
         "numbness in groin",
         "चाकमा झमझम",
         "गुप्तांग वरिपरि झमझम"
-      ]
+      ],
+      "implies": "Cauda equina syndrome (spinal cord compression)"
     },
     {
       "id": "rf_lbp_fever_spine",
@@ -433,7 +456,8 @@
         "night pain",
         "राति धेरै दुख",
         "ढाड दुखेर ज्वरो"
-      ]
+      ],
+      "implies": "Spinal infection (discitis, abscess, TB spine)"
     },
     {
       "id": "rf_meningism",
@@ -450,7 +474,8 @@
         "घाँटी अररो",
         "घाँटी कडा",
         "उज्यालो सहन"
-      ]
+      ],
+      "implies": "Meningitis"
     },
     {
       "id": "rf_head_thunderclap",
@@ -466,7 +491,8 @@
         "thunderclap",
         "अचानक टाउको",
         "जीवनमै यस्तो"
-      ]
+      ],
+      "implies": "Subarachnoid haemorrhage"
     },
     {
       "id": "rf_head_focal_deficit",
@@ -484,7 +510,8 @@
         "बोली लरबर",
         "हात खुट्टा चल्दैन",
         "हात चल्दैन"
-      ]
+      ],
+      "implies": "Stroke or intracranial lesion"
     },
     {
       "id": "rf_uti_pyelo",
@@ -501,7 +528,8 @@
         "कोखा दुख",
         "कम्मरको छेउ",
         "कामेर ज्वरो"
-      ]
+      ],
+      "implies": "Pyelonephritis (kidney infection)"
     }
   ]
 }

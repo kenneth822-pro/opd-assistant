@@ -120,6 +120,15 @@ data class TranscriptLine(val speaker: String, val text: String, val offsetMs: L
 /** A follow-up question proposed by the AI (display only; never changes safety state). */
 data class AiQuestion(val ne: String, val en: String, val reason: String = "")
 
+enum class AiLikelihood { LIKELY, POSSIBLE, MUST_NOT_MISS }
+
+/**
+ * One diagnosis the AI suggests the doctor consider (display only: it never changes safety state,
+ * never selects a medicine, and is always shown as an unverified AI suggestion).
+ * [conditionCode] is set only when it matches a catalogue condition.
+ */
+data class AiDiagnosis(val name: String, val likelihood: AiLikelihood, val reason: String = "", val conditionCode: String? = null)
+
 data class CaseState(
     val sessionId: String = UUID.randomUUID().toString(),
     val tick: Int = 0,
@@ -138,10 +147,14 @@ data class CaseState(
     val transcript: List<TranscriptLine> = emptyList(),
     val examFindings: List<String> = emptyList(),
     val aiNextQuestions: List<AiQuestion> = emptyList(),
+    /** The AI's current differential for the whole case (replaced on each update, kept until replaced). */
+    val aiDifferential: List<AiDiagnosis> = emptyList(),
     // ---- computed by Reducer.evaluate ----
     val sessionLevel: SessionLevel = SessionLevel.INFO,
     val sessionAlerts: List<String> = emptyList(),
     val pregnancyCheckNeeded: Boolean = false,
+    /** Patient is outside what the catalogue covers (e.g. a child): shown as a banner, never hidden. */
+    val scopeAlerts: List<String> = emptyList(),
     // ---- bookkeeping ----
     val counter: Int = 0,
     val audit: List<String> = emptyList()
@@ -171,7 +184,8 @@ data class LiveDelta(
     val comorbidities: List<String> = emptyList(),
     val currentMeds: List<MedInput> = emptyList(),
     val examFindings: List<String> = emptyList(),
-    val nextQuestions: List<AiQuestion> = emptyList()
+    val nextQuestions: List<AiQuestion> = emptyList(),
+    val differential: List<AiDiagnosis> = emptyList()
 )
 
 data class ProblemInput(

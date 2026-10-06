@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "note": "Speech models the app can install. A model is downloaded automatically ONLY if every file has a pinned sha256; otherwise it can be installed with 'Import file' (the app shows the file's sha256 so it can be pinned here). Nothing below has been verified from the build environment: see docs/ON_DEVICE_ASR.md.",
+  "models": [
+    {
+      "id": "nepali-whisper-turbo-ggml",
+      "display_name": "Nepali Whisper large-v3-turbo (GGML, CPU)",
+      "language": "ne",
+      "backend": "CPU_GGML",
+      "format": "ggml-whisper",
+      "files": [
+        { "name": "ggml-nepali-whisper-turbo-q5_0.bin", "url": null, "sha256": null, "size_bytes": null }
+      ],
+      "source": {
+        "repo": "sumanpaudel1997/nepali-asr-whisper-turbo",
+        "revision": null,
+        "verified": false,
+        "note": "Repository name as supplied by the project owner. The Hugging Face page was NOT reachable from the build environment, so the repository, its files and its revision have not been checked. Pin the exact revision (commit hash) here after checking the page."
+      },
+      "license": {
+        "name": "CC-BY-NC-4.0",
+        "verified": false,
+        "non_commercial": true,
+        "note": "Reported by the project owner; not verified against the model page. Non-commercial use only; attribution required. Do not treat as commercially unrestricted."
+      },
+      "notes": "The published weights are a Hugging Face (transformers) checkpoint. They must be converted to GGML and quantised first: see docs/ON_DEVICE_ASR.md, 'Converting the Nepali model', and tools/asr/convert_nepali_to_ggml.sh. Validate Nepali accuracy after quantising (compare WER of the f16 and quantised files on held-out Nepali audio) before relying on it."
+    },
+    {
+      "id": "whisper-large-v3-turbo-ggml-generic",
+      "display_name": "Whisper large-v3-turbo (generic multilingual, GGML q5_0) - plumbing test only",
+      "language": "ne",
+      "backend": "CPU_GGML",
+      "format": "ggml-whisper",
+      "files": [
+        { "name": "ggml-large-v3-turbo-q5_0.bin", "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin", "sha256": null, "size_bytes": null }
+      ],
+      "source": {
+        "repo": "ggerganov/whisper.cpp",
+        "revision": null,
+        "verified": false,
+        "note": "Publicly known GGML conversion of OpenAI whisper-large-v3-turbo. Used ONLY to prove the Android plumbing (Phase A); Nepali accuracy of the generic model is much lower than the Nepali fine-tune. Not checked from the build environment."
+      },
+      "license": {
+        "name": "MIT",
+        "verified": false,
+        "non_commercial": false,
+        "note": "OpenAI released Whisper code and weights under the MIT licence; not re-checked from the build environment."
+      },
+      "notes": "No sha256 is pinned, so the app will not download it automatically. Download it yourself, then use 'Import file' in Settings; the app displays the sha256 so you can pin it here."
+    }
+  ]
+}

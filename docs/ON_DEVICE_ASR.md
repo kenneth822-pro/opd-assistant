@@ -31,7 +31,7 @@ Snapdragon NPU, no Qualcomm SDK access and could not reach huggingface.co**.
 
 | Item | Status | How |
 |---|---|---|
-| Routing, model manager, serial engine, error handling, Devanagari-safe output filter | ✅ verified | 74 JVM tests (`./gradlew :speech:test`); key behaviours mutation-checked |
+| Routing, model manager, serial engine, error handling, Devanagari-safe output filter | ✅ verified | 78 JVM tests (`./gradlew :speech:test`); key behaviours mutation-checked |
 | JNI bridge: symbol names/signatures, parameter marshalling, timestamp and log-prob conversion, UTF-8 safety, cancellation, lifecycle | ✅ verified on a host JVM | `tools/asr/bridge_selftest.sh` (28 checks; real JNI file + real `whisper.h` of the pinned release + a stub engine; JVM `-Xcheck:jni`) |
 | Whole app type-checks | ✅ verified | host compile of every Kotlin file against the real Android framework classes |
 | Android + ARM64 cross-compile in CI | ✅ verified | GitHub Actions run #5 on this branch: both jobs green. `build-local-asr` built with NDK 27.0.12077973 + CMake 3.22.1 (`configureCMakeDebug[arm64-v8a]`, `buildCMakeDebug[arm64-v8a]`), and `lib/arm64-v8a/libopd_asr.so` (4.36 MB, so whisper.cpp + ggml are really linked) is in the APK. The default job (no native engine) also passed, incl. `:engine:test` and `:speech:test`, and published no release (not `main`) |

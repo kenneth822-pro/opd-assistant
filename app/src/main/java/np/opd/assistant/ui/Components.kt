@@ -3,13 +3,16 @@ package np.opd.assistant.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -20,9 +23,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,6 +62,14 @@ object Palette {
     val unknownSpeaker = Color(0xFF5F6368)
 }
 
+/** At this width and above, a screen that supplies a `side` panel shows it next to the content. */
+val WideBreakpoint = 720.dp
+private val SidePanelWidth = 400.dp
+
+/**
+ * @param pinned shown above the scrolling content on narrow screens (stays visible while scrolling).
+ * @param side shown as a permanent panel beside the content on wide screens (instead of [pinned]).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Page(
@@ -63,6 +77,8 @@ fun Page(
     onBack: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
+    pinned: (@Composable ColumnScope.() -> Unit)? = null,
+    side: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Scaffold(
@@ -75,15 +91,35 @@ fun Page(
         },
         bottomBar = bottomBar
     ) { pad ->
-        Column(
-            modifier = Modifier
-                .padding(pad)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            content = content
-        )
+        BoxWithConstraints(Modifier.padding(pad).fillMaxSize()) {
+            val sidePane = if (maxWidth >= WideBreakpoint) side else null // the side panel only exists on wide screens
+            val wide = sidePane != null
+            Column(Modifier.fillMaxSize()) {
+                if (!wide && pinned != null) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), content = pinned)
+                }
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        content = content
+                    )
+                    if (sidePane != null) {
+                        Surface(tonalElevation = 2.dp, modifier = Modifier.width(SidePanelWidth).fillMaxHeight()) {
+                            Column(
+                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                content = sidePane
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -102,14 +138,16 @@ fun Pill(text: String, bg: Color, fg: Color) {
 
 @Composable
 fun ChipButton(text: String, bg: Color, fg: Color, onClick: () -> Unit) {
+    // The touch target is at least 48 dp (set outside the background); the visible chip keeps its size.
     Text(
         text,
         color = fg,
         fontSize = 13.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
+            .clickable(role = Role.Button, onClick = onClick)
+            .minimumInteractiveComponentSize()
             .background(bg, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp)
     )
 }

@@ -71,6 +71,9 @@ interface LocalSpeechRecognizer {
 
     fun isReady(): Boolean
 
+    /** One or two lines describing what is actually running (library version, CPU features, last timings). For the developer area. */
+    fun diagnostics(): String = ""
+
     /** Asks a running [transcribe] to stop soon. Must be safe to call from any thread at any time. */
     fun cancel() {}
 

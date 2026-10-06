@@ -127,6 +127,9 @@ class LocalAsrService(
 
     fun statsSummary(): String = guarded?.stats?.summary() ?: "Local ASR: not used yet"
 
+    /** What is actually running (library, CPU features, last timings), for the developer area. */
+    fun engineDiagnostics(): String = guarded?.diagnostics().orEmpty()
+
     /** Frees the loaded model (the files stay). */
     fun release() {
         synchronized(lock) { dropEngine() }

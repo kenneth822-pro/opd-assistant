@@ -120,6 +120,8 @@ class GuardedRecognizer(
         }
     }
 
+    fun diagnostics(): String = delegate.diagnostics()
+
     /** Frees the model (e.g. when the doctor deletes it). The next [ensureReady] loads it again. */
     fun release() {
         delegate.cancel()

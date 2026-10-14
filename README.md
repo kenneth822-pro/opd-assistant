@@ -125,3 +125,4 @@ Key safety rules (all enforced in code and covered by tests):
 ```
 
 Open the folder in Android Studio to work on the app. The engine can be edited in any IDE.
+# Build trigger

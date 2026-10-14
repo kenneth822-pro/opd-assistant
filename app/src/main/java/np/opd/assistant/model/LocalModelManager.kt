@@ -182,7 +182,7 @@ class LocalModelManager(private val app: Application) {
                         }
                         Log.w(TAG, "Download failed for ${def.id}, retrying... (attempt $retryCount)", e)
                         _downloadProgress.update { it.copy(progress = 0f, status = "Retry $retryCount of $maxRetries...") }
-                        delay(2000 * retryCount) // Exponential backoff
+                        delay((2000L * retryCount)) // Exponential backoff
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Download failed for ${def.id} after $maxRetries retries", e)

@@ -238,8 +238,8 @@ class LocalModelManager(private val app: Application) {
     }
 
     private fun moveFilesFromSubdir(dir: File) {
-        val subdirs = dir.listFiles()?.filter { it.isDirectory } ?: emptyArray()
-        for (subdir in subdirs) {
+        val subdirs = dir.listFiles()?.filter { it.isDirectory }?.toList() ?: emptyList()
+        subdirs.forEach { subdir ->
             subdir.listFiles()?.forEach { file ->
                 val dest = File(dir, file.name)
                 if (file.renameTo(dest)) {

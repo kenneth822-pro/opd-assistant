@@ -59,17 +59,15 @@ class LocalWhisperClient(
             val recognizerConfig = OfflineRecognizerConfig()
             recognizerConfig.featConfig.sampleRate = 16000
             recognizerConfig.featConfig.featureDim = 80
-            recognizerConfig.modelConfig.transducer.encoder = File(modelDir, "encoder.int8.onnx").absolutePath
-            recognizerConfig.modelConfig.transducer.decoder = File(modelDir, "decoder.int8.onnx").absolutePath
-            recognizerConfig.modelConfig.transducer.joiner = File(modelDir, "joiner.int8.onnx").absolutePath
             recognizerConfig.modelConfig.tokens = File(modelDir, "tokens.txt").absolutePath
             recognizerConfig.modelConfig.numThreads = 2
             recognizerConfig.modelConfig.debug = false
             recognizerConfig.modelConfig.provider = "cpu"
-            recognizerConfig.modelConfig.modelType = "whisper"
             
             // Whisper-specific config
-            recognizerConfig.modelConfig.whisper.language = "auto"  // Auto-detect language
+            recognizerConfig.modelConfig.whisper.encoder = File(modelDir, "encoder.int8.onnx").absolutePath
+            recognizerConfig.modelConfig.whisper.decoder = File(modelDir, "decoder.int8.onnx").absolutePath
+            recognizerConfig.modelConfig.whisper.language = "auto"
             recognizerConfig.modelConfig.whisper.task = "transcribe"
             recognizerConfig.modelConfig.whisper.tailPaddings = 1000
             
@@ -94,7 +92,7 @@ class LocalWhisperClient(
 
         // Convert WAV bytes to FloatArray (16kHz mono, 16-bit PCM)
         val samples = wavToFloatArray(wav)
-        if (samples.isEmpty()) return emptyList()
+        if (samples.isEmpty()) return@withContext emptyList()
 
         // Run VAD to get speech segments
         val segments = mutableListOf<FloatArray>()
@@ -105,7 +103,7 @@ class LocalWhisperClient(
             vad.pop()
         }
 
-        if (segments.isEmpty()) return emptyList()
+        if (segments.isEmpty()) return@withContext emptyList()
 
         // Run ASR on each segment
         val results = mutableListOf<TranscriptLine>()

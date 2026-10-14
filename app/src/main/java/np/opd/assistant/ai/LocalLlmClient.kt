@@ -1,10 +1,10 @@
 package np.opd.assistant.ai
 
-import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import np.opd.engine.J
+import np.opd.engine.Prompts
 import org.pytorch.executorch.extension.llm.LlmModule
 import org.pytorch.executorch.extension.llm.LlmModuleConfig
 import org.pytorch.executorch.extension.llm.LlmCallback
@@ -13,13 +13,12 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Local LLM using ExecuTorch (LlamaModule).
+ * Local LLM using ExecuTorch (LlmModule).
  * Runs entirely on-device for note generation and live suggestions.
  */
 class LocalLlmClient(
     private val modelFile: File,
-    private val tokenizerFile: File,
-    private val grammarFile: File? = null
+    private val tokenizerFile: File
 ) : AiClient {
 
     private val TAG = "LocalLlmClient"
@@ -41,18 +40,13 @@ class LocalLlmClient(
     private fun ensureInitialized() {
         if (initialized) return
         try {
-            val configBuilder = LlmModuleConfig.create()
+            val config = LlmModuleConfig()
                 .modulePath(modelFile.absolutePath)
                 .tokenizerPath(tokenizerFile.absolutePath)
                 .temperature(0.1f)
-                .modelType(LlmModuleConfig.MODEL_TYPE_TEXT)
-                .loadMode(LlmModuleConfig.LOAD_MODE_MMAP)
+                .build()
             
-            // Note: ExecuTorch doesn't directly support GBNF grammar in LlmModule yet
-            // We'll enforce JSON via prompt engineering and post-processing
-            
-            module = LlmModule(configBuilder.build())
-            module!!.load()
+            module = LlmModule(config)
             initialized = true
             Log.i(TAG, "Initialized ExecuTorch LLM from ${modelFile.name}")
         } catch (e: Exception) {
@@ -78,31 +72,17 @@ class LocalLlmClient(
         val errorRef = AtomicReference<Exception>()
 
         val callback = object : LlmCallback {
-            override fun onToken(token: String) {
-                resultRef.accumulateAndGet(token) { acc, t -> acc + t }
-            }
-
-            override fun onStats(stats: String) {
-                Log.d(TAG, "LLM stats: $stats")
-            }
-
-            override fun onError(code: Int, msg: String) {
-                errorRef.set(ApiException("LLM error $code: $msg"))
+            override fun onResult(result: String) {
+                resultRef.set(result)
                 latch.countDown()
             }
         }
 
         module!!.generate(prompt, callback)
         
-        // Wait for generation to complete (callback doesn't signal completion directly)
-        // We'll use a timeout approach
+        // Wait for generation to complete
         val completed = latch.await(60, java.util.concurrent.TimeUnit.SECONDS)
         if (!completed) {
-            // Check if we got any tokens
-            val result = resultRef.get() ?: ""
-            if (result.isNotEmpty()) {
-                return@withContext extractJson(result)
-            }
             throw ApiException("LLM generation timed out")
         }
 

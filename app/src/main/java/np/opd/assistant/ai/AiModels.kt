@@ -1,9 +1,11 @@
 package np.opd.assistant.ai
 
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import np.opd.engine.J
 import okhttp3.Request
+import java.io.File
 
 /**
  * AI providers. Everything except Gemini speaks the OpenAI "chat completions" format,

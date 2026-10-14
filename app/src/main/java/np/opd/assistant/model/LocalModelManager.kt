@@ -14,8 +14,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 /**
  * Manages local model files (download, cache, verification).
@@ -208,8 +210,7 @@ class LocalModelManager(private val app: Application) {
             _downloadProgress.update { it.copy(progress = progress * 0.5f, status = "Downloading...") }
         }
         
-        // Extract tar.bz2 (requires apache commons-compress or similar)
-        // For simplicity, we'll use a basic extraction
+        // Extract tar.bz2
         _downloadProgress.update { it.copy(progress = 0.5f, status = "Extracting...") }
         extractTarBz2(tempFile, targetDir)
         tempFile.delete()
@@ -230,7 +231,7 @@ class LocalModelManager(private val app: Application) {
         val url = URL(urlString)
         val connection = url.openConnection()
         connection.connect()
-        val fileSize = connection.contentLengthLong()
+        val fileSize = connection.contentLengthLong
         
         val input = connection.getInputStream()
         val output = FileOutputStream(targetFile)
@@ -252,12 +253,9 @@ class LocalModelManager(private val app: Application) {
     }
 
     private fun extractTarBz2(tarFile: File, targetDir: File) {
-        // Basic tar.bz2 extraction using Java's built-in GZIPInputStream + manual tar parsing
-        // For production, consider using Apache Commons Compress
         try {
             val bis = java.io.BufferedInputStream(java.io.FileInputStream(tarFile))
-            val bis2 = java.io.BufferedInputStream(bis)
-            val bz2In = org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(bis2)
+            val bz2In = org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(bis)
             val tarIn = org.apache.commons.compress.archivers.tar.TarArchiveInputStream(bz2In)
             
             var entry = tarIn.getNextTarEntry()
@@ -280,8 +278,7 @@ class LocalModelManager(private val app: Application) {
             }
             tarIn.close()
         } catch (e: Exception) {
-            Log.e(TAG, "Tar extraction failed, trying alternative", e)
-            // Fallback: try with just GZIP if it's actually .tar.gz
+            Log.e(TAG, "Tar extraction failed", e)
             throw e
         }
     }

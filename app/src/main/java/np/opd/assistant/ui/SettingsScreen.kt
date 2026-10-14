@@ -177,85 +177,6 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
 }
 
 @Composable
-private fun ProviderCard(p: Provider, st: UiState, vm: SessionViewModel) {
-    val hasKey = p in st.keys
-    val loaded = st.models[p]?.size ?: 0
-    val isLocal = p.isLocal
-    var open by remember { mutableStateOf(p == Provider.GEMINI && !hasKey) }
-    var keyText by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf(st.customBaseUrl) }
-    var show by remember { mutableStateOf(false) }
-    SectionCard(title = "") {
-        Row(
-            Modifier.fillMaxWidth().clickable { open = !open },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(p.label, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            if (hasKey) Pill("key ✓", Palette.okBg, Palette.okFg)
-            if (loaded > 0) Pill("$loaded models", Palette.greyBg, Palette.greyFg)
-            if (isLocal) Pill("Local", Palette.infoBg, Palette.infoFg)
-            Text(if (open) "▾" else "▸", fontSize = 18.sp)
-        }
-        if (open) {
-            Muted(p.keyHelp)
-            if (p == Provider.CUSTOM) {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it.trim() },
-                    label = { Text("Server address (ends with /v1)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedButton(onClick = { vm.setCustomBaseUrl(url) }, enabled = url != st.customBaseUrl) { Text("Save address") }
-            }
-            if (!isLocal) {
-                OutlinedTextField(
-                    value = keyText,
-                    onValueChange = { keyText = it.trim() },
-                    label = { Text(if (hasKey) "Paste a new key to replace" else "Paste API key") },
-                    singleLine = true,
-                    visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = { vm.saveKey(p, keyText); keyText = "" }, enabled = keyText.isNotBlank()) { Text("Save") }
-                    TextButton(onClick = { show = !show }) { Text(if (show) "Hide" else "Show") }
-                }
-                if (hasKey) TextButton(onClick = { vm.removeKey(p) }) { Text("Remove key", color = Palette.greyFg) }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = { vm.loadModels(p) }) { Text("Load models") }
-                }
-                Muted("No API key needed. Models run entirely on your device.")
-            }
-            Muted(limitsNote(p))
-        }
-    }
-}
-
-@Composable
-internal fun ModelSummary(m: ModelInfo?, empty: String) {
-    if (m == null) {
-        if (empty.isNotBlank()) Text(empty, color = Palette.urgentFg, fontSize = 13.sp)
-        return
-    }
-    Text(m.name, fontWeight = FontWeight.SemiBold)
-    Text("${m.provider.label} · ${m.id}", fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { m.tags().forEach { TagPill(it) } }
-}
-
-@Composable
-internal fun TagPill(tag: String) = when (tag) {
-    "FREE" -> Pill("FREE", Palette.okBg, Palette.okFg)
-    "PAID" -> Pill("PAID", Palette.greyBg, Palette.greyFg)
-    "AUDIO" -> Pill("AUDIO", Palette.infoBg, Palette.infoFg)
-    "SPEECH-TO-TEXT" -> Pill("SPEECH-TO-TEXT", Palette.infoBg, Palette.infoFg)
-    else -> Pill(tag, Palette.greyBg, Palette.greyFg)
-}
-
-@Composable
 internal fun LocalModelsSection(vm: SessionViewModel) {
     val sttModels by vm.localModels.sttModels.collectAsStateWithLifecycle()
     val llmModels by vm.localModels.llmModels.collectAsStateWithLifecycle()
@@ -445,4 +366,83 @@ private fun ModelPickerDialog(
             }
         }
     }
+}
+
+@Composable
+private fun ProviderCard(p: Provider, st: UiState, vm: SessionViewModel) {
+    val hasKey = p in st.keys
+    val loaded = st.models[p]?.size ?: 0
+    val isLocal = p.isLocal
+    var open by remember { mutableStateOf(p == Provider.GEMINI && !hasKey) }
+    var keyText by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf(st.customBaseUrl) }
+    var show by remember { mutableStateOf(false) }
+    SectionCard(title = "") {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = !open },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(p.label, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (hasKey) Pill("key ✓", Palette.okBg, Palette.okFg)
+            if (loaded > 0) Pill("$loaded models", Palette.greyBg, Palette.greyFg)
+            if (isLocal) Pill("Local", Palette.infoBg, Palette.infoFg)
+            Text(if (open) "▾" else "▸", fontSize = 18.sp)
+        }
+        if (open) {
+            Muted(p.keyHelp)
+            if (p == Provider.CUSTOM) {
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it.trim() },
+                    label = { Text("Server address (ends with /v1)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedButton(onClick = { vm.setCustomBaseUrl(url) }, enabled = url != st.customBaseUrl) { Text("Save address") }
+            }
+            if (!isLocal) {
+                OutlinedTextField(
+                    value = keyText,
+                    onValueChange = { keyText = it.trim() },
+                    label = { Text(if (hasKey) "Paste a new key to replace" else "Paste API key") },
+                    singleLine = true,
+                    visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = { vm.saveKey(p, keyText); keyText = "" }, enabled = keyText.isNotBlank()) { Text("Save") }
+                    TextButton(onClick = { show = !show }) { Text(if (show) "Hide" else "Show") }
+                }
+                if (hasKey) TextButton(onClick = { vm.removeKey(p) }) { Text("Remove key", color = Palette.greyFg) }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { vm.loadModels(p) }) { Text("Load models") }
+                }
+                Muted("No API key needed. Models run entirely on your device.")
+            }
+            Muted(limitsNote(p))
+        }
+    }
+}
+
+@Composable
+internal fun ModelSummary(m: ModelInfo?, empty: String) {
+    if (m == null) {
+        if (empty.isNotBlank()) Text(empty, color = Palette.urgentFg, fontSize = 13.sp)
+        return
+    }
+    Text(m.name, fontWeight = FontWeight.SemiBold)
+    Text("${m.provider.label} · ${m.id}", fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { m.tags().forEach { TagPill(it) } }
+}
+
+@Composable
+internal fun TagPill(tag: String) = when (tag) {
+    "FREE" -> Pill("FREE", Palette.okBg, Palette.okFg)
+    "PAID" -> Pill("PAID", Palette.greyBg, Palette.greyFg)
+    "AUDIO" -> Pill("AUDIO", Palette.infoBg, Palette.infoFg)
+    "SPEECH-TO-TEXT" -> Pill("SPEECH-TO-TEXT", Palette.infoBg, Palette.infoFg)
+    else -> Pill(tag, Palette.greyBg, Palette.greyFg)
 }

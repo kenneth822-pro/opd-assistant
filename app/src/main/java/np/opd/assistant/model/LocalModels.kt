@@ -8,7 +8,9 @@ data class ModelDef(
     val id: String,
     val name: String,
     val url: String,
+    val vadUrl: String? = null,
     val sizeBytes: Long,
+    val filePrefix: String = "",
     val files: List<String>,
     val type: ModelType,
     val language: String
@@ -42,7 +44,10 @@ object AvailableSttModels {
             id = "sherpa-onnx-whisper-tiny.en",
             name = "Whisper Tiny.en (English, ~117 MB)",
             url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.en.tar.bz2",
+            vadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
             sizeBytes = 117_000_000L,
+            // Files in archive have prefix "tiny.en-"
+            filePrefix = "tiny.en-",
             files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt", "silero_vad.onnx"),
             type = ModelType.STT,
             language = "English"
@@ -51,7 +56,9 @@ object AvailableSttModels {
             id = "sherpa-onnx-whisper-tiny",
             name = "Whisper Tiny (Multilingual 99 langs, ~200 MB)",
             url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2",
+            vadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
             sizeBytes = 200_000_000L,
+            filePrefix = "tiny-",
             files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt", "silero_vad.onnx"),
             type = ModelType.STT,
             language = "Multilingual (99)"
@@ -60,7 +67,9 @@ object AvailableSttModels {
             id = "sherpa-onnx-whisper-base.en",
             name = "Whisper Base.en (English, ~200 MB)",
             url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.en.tar.bz2",
+            vadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
             sizeBytes = 200_000_000L,
+            filePrefix = "base.en-",
             files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt", "silero_vad.onnx"),
             type = ModelType.STT,
             language = "English"
@@ -69,7 +78,9 @@ object AvailableSttModels {
             id = "sherpa-onnx-whisper-base",
             name = "Whisper Base (Multilingual 99 langs, ~350 MB)",
             url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2",
+            vadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
             sizeBytes = 350_000_000L,
+            filePrefix = "base-",
             files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt", "silero_vad.onnx"),
             type = ModelType.STT,
             language = "Multilingual (99)"

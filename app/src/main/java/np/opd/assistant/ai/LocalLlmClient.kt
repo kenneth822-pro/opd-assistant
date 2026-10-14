@@ -67,11 +67,7 @@ class LocalLlmClient(
         Log.w(TAG, "generate() called but not implemented (STUB)")
         
         // Return minimal valid JSON for the expected schema
-        if (schema != null) {
-            // Try to construct a minimal valid response based on schema
-            return "{}"
-        }
-        return "{}"
+        "{}"
     }
 
     companion object {

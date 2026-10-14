@@ -649,4 +649,32 @@ class EngineTest {
             }
         }
     }
+
+    @Test
+    fun jsonParserHandlesBadNumbersWithDescriptiveError() {
+        try {
+            J.parse("{\"val\": 1.2.3}")
+            org.junit.Assert.fail("Expected JsonException")
+        } catch (e: JsonException) {
+            assertTrue("Expected message to contain '1.2.3', was '${e.message}'", e.message?.contains("1.2.3") == true)
+        }
+    }
+
+    @Test
+    fun vitalsMergeKeepsFahrenheitAndConvertsCelsiusCorrectly() {
+        val old = Vitals()
+        // 38.0 C -> 100.4 F
+        val withCelsius = Reducer.mergeVitals(old, Vitals(tempF = 38.0))
+        assertNotNull(withCelsius.tempF)
+        assertEquals(100.4, withCelsius.tempF!!, 0.01)
+
+        // 98.6 F should stay 98.6 F
+        val withFahrenheit = Reducer.mergeVitals(old, Vitals(tempF = 98.6))
+        assertNotNull(withFahrenheit.tempF)
+        assertEquals(98.6, withFahrenheit.tempF!!, 0.01)
+
+        // Out of range (< 90 F or > 110 F after conversion) is dropped
+        val outOfRange = Reducer.mergeVitals(old, Vitals(tempF = 50.0))
+        assertNull(outOfRange.tempF)
+    }
 }

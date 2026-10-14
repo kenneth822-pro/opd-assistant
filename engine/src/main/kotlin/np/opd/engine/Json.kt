@@ -228,6 +228,7 @@ private class Parser(private val s: String) {
         val start = i
         if (s[i] == '-') i++
         while (i < s.length && (s[i].isDigit() || s[i] == '.' || s[i] == 'e' || s[i] == 'E' || s[i] == '+' || s[i] == '-')) i++
-        return J.Num(s.substring(start, i).toDoubleOrNull() ?: throw JsonException("Bad number at $start"))
+        val raw = s.substring(start, i)
+        return J.Num(raw.toDoubleOrNull() ?: throw JsonException("Bad number '$raw' at $start"))
     }
 }

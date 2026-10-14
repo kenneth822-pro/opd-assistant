@@ -52,7 +52,10 @@ class WavSegmentRecorder(
         }
         rec.startRecording()
         running = true
-        thread = Thread({ loop(rec, chunkBytes / 2) }, "wav-recorder").apply { start() }
+        thread = Thread({ loop(rec, chunkBytes / 2) }, "wav-recorder").apply {
+            isDaemon = true
+            start()
+        }
     }
 
     /** Stops recording; the last (partial) segment is emitted before this returns. */

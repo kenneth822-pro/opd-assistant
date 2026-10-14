@@ -136,6 +136,7 @@ class GeminiClient(
                 try {
                     return@withContext call(system, parts, schema, useSystem, useSchema, thinkingOff)
                 } catch (e: ApiException) {
+                    if (e.transient) throw e
                     val msg = (e.message ?: "").lowercase()
                     if (thinkingOff && (msg.contains("thinking") || msg.contains("budget"))) {
                         thinkingOff = false; noThinkingOff += model.id; continue
@@ -204,6 +205,18 @@ class GeminiClient(
         private val noSystem: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
         private val noJson: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
         private val noThinkingOff: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
+
+        fun resetModelCapabilities(modelId: String? = null) {
+            if (modelId != null) {
+                noSystem.remove(modelId)
+                noJson.remove(modelId)
+                noThinkingOff.remove(modelId)
+            } else {
+                noSystem.clear()
+                noJson.clear()
+                noThinkingOff.clear()
+            }
+        }
     }
 }
 
@@ -274,9 +287,15 @@ class OpenAiCompatClient(
                         text = Http.text(request(withFormat, systemAsUser))
                         break
                     } catch (e: ApiException) {
+                        if (e.transient || e.modelMissing) throw e
                         val msg = (e.message ?: "").lowercase()
+                        if (msg.startsWith("http 401") || msg.startsWith("http 403")) throw e
+                        val isFormatError = msg.startsWith("http 400") || msg.startsWith("http 422") ||
+                            msg.contains("response_format") || msg.contains("json_schema") ||
+                            msg.contains("schema") || msg.contains("structured output") ||
+                            msg.contains("format")
                         // Fall back step by step: drop response_format, then move the system prompt into the message.
-                        if (withFormat && msg.startsWith("http 4")) { withFormat = false; continue }
+                        if (withFormat && isFormatError) { withFormat = false; continue }
                         if (!systemAsUser && (msg.contains("system") || msg.contains("developer instruction"))) { systemAsUser = true; continue }
                         throw e
                     }

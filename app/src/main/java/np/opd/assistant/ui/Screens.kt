@@ -566,7 +566,7 @@ internal fun DemographicsDialog(current: Demographics, onSave: (Int?, Gender?) -
         title = { Text("Patient") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumField("Age (years)", age, Modifier.fillMaxWidth()) { age = it.filter { ch -> ch.isDigit() }.take(3) }
+                NumField("Age (years)", age, Modifier.fillMaxWidth(), allowDecimal = false, maxLen = 3) { age = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Choice("Female", gender == Gender.FEMALE) { gender = Gender.FEMALE }
                     Choice("Male", gender == Gender.MALE) { gender = Gender.MALE }
@@ -574,7 +574,7 @@ internal fun DemographicsDialog(current: Demographics, onSave: (Int?, Gender?) -
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(age.toIntOrNull()?.takeIf { it in 0..120 }, gender) }) { Text("Save") }
+            TextButton(onClick = { onSave(age.trim().toIntOrNull()?.takeIf { it in 0..120 }, gender) }) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
@@ -603,7 +603,7 @@ internal fun VitalsDialog(current: Vitals, onSave: (Vitals) -> Unit, onDismiss: 
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NumField("SpO2 %", spo2, Modifier.weight(1f)) { spo2 = it }
-                    NumField("Temp °F", temp, Modifier.weight(1f)) { temp = it }
+                    NumField("Temp °F", temp, Modifier.weight(1f), allowDecimal = true) { temp = it }
                 }
             }
         },
@@ -611,8 +611,12 @@ internal fun VitalsDialog(current: Vitals, onSave: (Vitals) -> Unit, onDismiss: 
             TextButton(onClick = {
                 onSave(
                     Vitals(
-                        bpSystolic = sys.toIntOrNull(), bpDiastolic = dia.toIntOrNull(), pulse = pulse.toIntOrNull(),
-                        rr = rr.toIntOrNull(), spo2 = spo2.toIntOrNull(), tempF = temp.toDoubleOrNull(),
+                        bpSystolic = sys.trim().toIntOrNull(),
+                        bpDiastolic = dia.trim().toIntOrNull(),
+                        pulse = pulse.trim().toIntOrNull(),
+                        rr = rr.trim().toIntOrNull(),
+                        spo2 = spo2.trim().toIntOrNull(),
+                        tempF = temp.trim().toDoubleOrNull(),
                         bloodGlucose = current.bloodGlucose
                     )
                 )
@@ -623,13 +627,32 @@ internal fun VitalsDialog(current: Vitals, onSave: (Vitals) -> Unit, onDismiss: 
 }
 
 @Composable
-private fun NumField(label: String, value: String, modifier: Modifier, onChange: (String) -> Unit) {
+private fun NumField(
+    label: String,
+    value: String,
+    modifier: Modifier,
+    allowDecimal: Boolean = false,
+    maxLen: Int = 5,
+    onChange: (String) -> Unit
+) {
     OutlinedTextField(
         value = value,
-        onValueChange = { v -> onChange(v.filter { it.isDigit() || it == '.' }.take(5)) },
+        onValueChange = { v ->
+            val filtered = if (allowDecimal) {
+                var dotSeen = false
+                v.filter { ch ->
+                    if (ch.isDigit()) true
+                    else if (ch == '.' && !dotSeen) { dotSeen = true; true }
+                    else false
+                }
+            } else {
+                v.filter { it.isDigit() }
+            }
+            onChange(filtered.take(maxLen))
+        },
         label = { Text(label, fontSize = 12.sp) },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        keyboardOptions = KeyboardOptions(keyboardType = if (allowDecimal) KeyboardType.Decimal else KeyboardType.Number),
         modifier = modifier
     )
 }

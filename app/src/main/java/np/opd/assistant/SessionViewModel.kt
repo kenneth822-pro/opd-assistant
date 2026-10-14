@@ -116,7 +116,16 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     private val transcribePrompt = Prompts.transcriptionSystemPrompt()
     private val transcribeSchema = Prompts.transcriptionSchema()
 
-    private class Segment(val file: File, val startMs: Long, val durationMs: Long, val voiced: Float, val number: Int)
+    private class Segment(
+        val file: File,
+        val startMs: Long,
+        val durationMs: Long,
+        val voiced: Float,
+        val number: Int,
+        val force: Boolean = false
+    ) {
+        fun withForce(force: Boolean) = Segment(file, startMs, durationMs, voiced, number, force)
+    }
 
     private var recorder: WavSegmentRecorder? = null
     private val segments = mutableListOf<Segment>()
@@ -161,8 +170,8 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         speechModel = settings.speechModel,
         analysisModel = settings.analysisModel,
         backupModel = settings.backupModel,
-        models = Provider.values().associateWith { settings.models(it) },
-        keys = Provider.values().filter { key(it).isNotBlank() }.toSet(),
+        models = Provider.entries.associateWith { settings.models(it) },
+        keys = Provider.entries.filter { key(it).isNotBlank() }.toSet(),
         customBaseUrl = settings.customBaseUrl
     )
 
@@ -185,6 +194,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         if (value.isBlank()) return
         settings.setKey(provider, value)
         keyCache.remove(provider)
+        if (provider == Provider.GEMINI) GeminiClient.resetModelCapabilities()
         refreshSettings()
         showMessage("${provider.label} key saved.")
         loadModels(provider)
@@ -193,6 +203,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     fun removeKey(provider: Provider) {
         settings.setKey(provider, "")
         keyCache.remove(provider)
+        if (provider == Provider.GEMINI) GeminiClient.resetModelCapabilities()
         refreshSettings()
         showMessage("${provider.label} key removed.")
     }
@@ -473,10 +484,10 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     private fun setSeg(n: Int, f: (SegmentStatus) -> SegmentStatus) =
         _ui.update { st -> st.copy(segments = st.segments.map { if (it.number == n) f(it) else it }) }
 
-    private suspend fun transcribeSegment(seg: Segment, force: Boolean = false) {
+    private suspend fun transcribeSegment(seg: Segment) {
         val cat = catalogues ?: return
         val speech = sessionSpeech ?: settings.speechModel ?: return
-        if (!force && seg.voiced < MIN_VOICED) {
+        if (!seg.force && seg.voiced < MIN_VOICED) {
             setSeg(seg.number) { it.copy(state = SegState.SILENT) }
             if (forceAnalysis) requestAnalysis(true)
             return
@@ -643,13 +654,13 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         if (q != null) {
             list.forEach { seg ->
                 setSeg(seg.number) { it.copy(state = SegState.QUEUED, error = null) }
-                if (includeSilent) viewModelScope.launch { transcribeSegment(seg, force = true) } else q.trySend(seg)
+                q.trySend(seg.withForce(includeSilent))
             }
         } else {
             if (_ui.value.busy != null) return
             viewModelScope.launch {
                 _ui.update { it.copy(busy = "Retrying ${list.size} segment(s)…") }
-                list.forEach { transcribeSegment(it, force = includeSilent) }
+                list.forEach { transcribeSegment(it.withForce(includeSilent)) }
                 runFinal()
             }
         }

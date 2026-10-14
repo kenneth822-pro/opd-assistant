@@ -108,7 +108,7 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
 
         Text("AI providers", style = MaterialTheme.typography.titleMedium)
         Muted("Add a key for at least one provider. Keys are encrypted on this phone and only sent to that provider.")
-        Provider.values().forEach { p -> ProviderCard(p, st, vm) }
+        Provider.entries.forEach { p -> ProviderCard(p, st, vm) }
 
         Text("Models", style = MaterialTheme.typography.titleMedium)
         SectionCard("1. Speech model — listens to the audio") {
@@ -249,7 +249,7 @@ private fun ModelPickerDialog(
     onDismiss: () -> Unit
 ) {
     val initial = preferred?.takeIf { models[it]?.any(accept) == true }
-        ?: Provider.values().firstOrNull { p -> models[p]?.any(accept) == true }
+        ?: Provider.entries.firstOrNull { p -> models[p]?.any(accept) == true }
         ?: Provider.GEMINI
     var provider by remember { mutableStateOf(initial) }
     var query by remember { mutableStateOf("") }
@@ -265,7 +265,7 @@ private fun ModelPickerDialog(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Provider.values().forEach { p ->
+                    Provider.entries.forEach { p ->
                         val n = models[p]?.count(accept) ?: 0
                         val label = p.label.substringBefore(" (") + if (n > 0) " ($n)" else ""
                         if (p == provider) Button(onClick = { provider = p }) { Text(label, fontSize = 12.sp) }

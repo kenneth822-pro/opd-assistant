@@ -47,7 +47,13 @@ import np.opd.assistant.SessionViewModel
 import np.opd.assistant.UiState
 import np.opd.assistant.ai.ModelInfo
 import np.opd.assistant.ai.Provider
+import np.opd.assistant.model.AvailableLlmModels
+import np.opd.assistant.model.AvailableSttModels
+import np.opd.assistant.model.DownloadProgress
+import np.opd.assistant.model.LocalModel
+import np.opd.assistant.model.LocalModelList
 import np.opd.assistant.model.LocalModelManager
+import np.opd.assistant.model.ModelDef
 import np.opd.assistant.model.ModelType
 
 private enum class PickerTarget { SPEECH, NOTES, BACKUP }
@@ -188,7 +194,7 @@ internal fun LocalModelsSection(vm: SessionViewModel) {
             Muted("Download a model to enable offline transcription. Tiny is fast; Base is more accurate for Nepali.")
             LocalModelsList(
                 models = sttModels,
-                availableModels = LocalModelManager.AVAILABLE_STT_MODELS.values.filter { it.type == ModelType.STT }.toList(),
+                availableModels = AvailableSttModels.ALL.values.filter { it.type == ModelType.STT }.toList(),
                 onDownload = { vm.localModels.downloadSttModel(it) },
                 onDelete = { vm.localModels.deleteModel(it) },
                 downloadProgress = downloadProgress
@@ -200,7 +206,7 @@ internal fun LocalModelsSection(vm: SessionViewModel) {
             Muted("Download a model to enable offline note generation and live suggestions. 1B is faster; 3B is more capable.")
             LocalModelsList(
                 models = llmModels,
-                availableModels = LocalModelManager.AVAILABLE_LLM_MODELS.values.filter { it.type == ModelType.LLM }.toList(),
+                availableModels = AvailableLlmModels.ALL.values.filter { it.type == ModelType.LLM }.toList(),
                 onDownload = { vm.localModels.downloadLlmModel(it) },
                 onDelete = { vm.localModels.deleteModel(it) },
                 downloadProgress = downloadProgress
@@ -225,11 +231,11 @@ internal fun LocalModelsSection(vm: SessionViewModel) {
 
 @Composable
 private fun LocalModelsList(
-    models: LocalModelManager.LocalModelList,
-    availableModels: List<LocalModelManager.ModelDef>,
+    models: LocalModelList,
+    availableModels: List<ModelDef>,
     onDownload: (String) -> Unit,
-    onDelete: (LocalModelManager.LocalModel) -> Unit,
-    downloadProgress: LocalModelManager.DownloadProgress
+    onDelete: (LocalModel) -> Unit,
+    downloadProgress: DownloadProgress
 ) {
     // Show downloaded models
     if (models.items.isNotEmpty()) {

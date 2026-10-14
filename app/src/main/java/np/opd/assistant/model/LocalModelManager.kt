@@ -28,7 +28,7 @@ class LocalModelManager(private val app: Application) {
     private val TAG = "LocalModelManager"
     private val scope = CoroutineScope(Dispatchers.IO)
     private val modelsDir = File(app.filesDir, "models")
-    
+
     // STT models
     private val sttModelsDir = File(modelsDir, "stt")
     private val _sttModels = MutableStateFlow<LocalModelList>(LocalModelList())
@@ -65,7 +65,6 @@ class LocalModelManager(private val app: Application) {
     private fun scanSttModels(): LocalModelList {
         val items = mutableListOf<LocalModel>()
         sttModelsDir.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
-            // Check both direct files and files in subdirectories
             val encoder = findFile(dir, "encoder.int8.onnx")
             val decoder = findFile(dir, "decoder.int8.onnx")
             val tokens = findFile(dir, "tokens.txt")
@@ -74,12 +73,11 @@ class LocalModelManager(private val app: Application) {
             val hasDecoder = decoder != null
             val hasTokens = tokens != null
             val hasVad = vad != null
-            
-            // Debug logging
+
             val allFiles = listAllFiles(dir)
             Log.i(TAG, "Scanning model dir ${dir.name}: encoder=$encoder, decoder=$decoder, tokens=$tokens, vad=$vad")
             Log.i(TAG, "All files in ${dir.name}: ${allFiles.joinToString(", ")}")
-            
+
             val def = AvailableSttModels.ALL[dir.name]
             items.add(LocalModel(
                 id = dir.name,
@@ -95,7 +93,6 @@ class LocalModelManager(private val app: Application) {
     }
 
     private fun findFile(dir: File, name: String): File? {
-        // Search recursively for the file
         return findFileRecursive(dir, name)
     }
 
@@ -158,11 +155,11 @@ class LocalModelManager(private val app: Application) {
 
     private fun downloadModel(def: ModelDef, targetDir: File) {
         if (activeDownloads.containsKey(def.id)) return
-        
+
         val job = scope.launch {
             _downloadProgress.update { it.copy(active = def.id, progress = 0f, status = "Starting...") }
             targetDir.mkdirs()
-            
+
             try {
                 if (def.url.endsWith(".tar.bz2")) {
                     downloadAndExtractTarBz2(def.url, targetDir, def)
@@ -182,18 +179,15 @@ class LocalModelManager(private val app: Application) {
     }
 
     private fun downloadAndExtractTarBz2(url: String, targetDir: File, def: ModelDef) {
-        // Download to temp file
         val tempFile = File(targetDir, "model.tar.bz2")
         downloadFile(url, tempFile) { progress ->
             _downloadProgress.update { it.copy(progress = progress * 0.4f, status = "Downloading model...") }
         }
-        
-        // Extract tar.bz2
+
         _downloadProgress.update { it.copy(progress = 0.4f, status = "Extracting model...") }
         extractTarBz2(tempFile, targetDir, def.filePrefix)
         tempFile.delete()
-        
-        // Download VAD model separately if needed
+
         if (def.type == ModelType.STT && def.vadUrl != null) {
             _downloadProgress.update { it.copy(progress = 0.8f, status = "Downloading VAD model...") }
             val vadFile = File(targetDir, "silero_vad.onnx")
@@ -219,12 +213,12 @@ class LocalModelManager(private val app: Application) {
         val connection = url.openConnection()
         connection.connect()
         val fileSize = connection.contentLengthLong
-        
+
         val input = connection.getInputStream()
         val output = FileOutputStream(targetFile)
         val buffer = ByteArray(8192)
         var downloaded = 0L
-        
+
         while (true) {
             val read = input.read(buffer)
             if (read == -1) break
@@ -245,10 +239,9 @@ class LocalModelManager(private val app: Application) {
             val bis = java.io.BufferedInputStream(java.io.FileInputStream(tarFile))
             val bz2In = org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(bis)
             val tarIn = org.apache.commons.compress.archivers.tar.TarArchiveInputStream(bz2In)
-            
+
             var entry = tarIn.getNextTarEntry()
             var entryCount = 0
-            val extractedFiles = mutableListOf<String>()
             while (entry != null) {
                 val outFile = File(targetDir, entry.name)
                 if (entry.isDirectory) {
@@ -264,26 +257,21 @@ class LocalModelManager(private val app: Application) {
                     }
                     fos.close()
                     entryCount++
-                    extractedFiles.add(entry.name)
                 }
                 entry = tarIn.getNextTarEntry()
             }
             tarIn.close()
             Log.i(TAG, "Extracted $entryCount files from tar.bz2")
-            
-            // Log all files in target directory for debugging
+
             val allFiles = listAllFiles(targetDir)
             Log.i(TAG, "All files after extraction: ${allFiles.joinToString(", ")}")
-            
-            // Rename files to remove prefix (e.g., "tiny.en-encoder.int8.onnx" -> "encoder.int8.onnx")
+
             if (filePrefix.isNotBlank()) {
                 renameFilesWithPrefix(targetDir, filePrefix)
             }
-            
-            // If files were extracted into a subdirectory, move them up
+
             moveFilesFromSubdir(targetDir)
-            
-            // Log files after moving
+
             val allFilesAfter = listAllFiles(targetDir)
             Log.i(TAG, "All files after processing: ${allFilesAfter.joinToString(", ")}")
         } catch (e: Exception) {
@@ -303,11 +291,11 @@ class LocalModelManager(private val app: Application) {
                     Log.w(TAG, "Failed to rename ${file.name}")
                 }
             }
-            // Also check subdirectories
             dir.listFiles()?.filter { it.isDirectory }?.forEach { subdir ->
                 renameFilesWithPrefix(subdir, prefix)
             }
         }
+    }
 
     private fun moveFilesFromSubdir(dir: File) {
         val subdirs = dir.listFiles()?.filter { it.isDirectory }?.toList() ?: emptyList()
@@ -323,7 +311,6 @@ class LocalModelManager(private val app: Application) {
                     Log.w(TAG, "Failed to move ${file.name} from ${subdir.name}")
                 }
             }
-            // Clean up empty subdirectory
             if (subdir.listFiles()?.isEmpty() == true) {
                 subdir.delete()
                 Log.i(TAG, "Deleted empty subdir ${subdir.name}")

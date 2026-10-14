@@ -61,10 +61,10 @@ class LocalWhisperClient(
     override suspend fun transcribe(wav: ByteArray, contextHint: String): List<TranscriptLine> = withContext(Dispatchers.IO) {
         ensureInitialized()
         
-        // TODO: Implement actual transcription using Sherpa-ONNX
-        // For now, return empty list to allow compilation
-        Log.w(TAG, "transcribe() called but not implemented (STUB)")
-        emptyList()
+        // STUB: Return a test transcript line to verify the model is reachable
+        // Real implementation would use Sherpa-ONNX OfflineRecognizer
+        Log.i(TAG, "transcribe() called (STUB) - returning test transcript")
+        listOf(TranscriptLine("test", "[STUB] Local Whisper model reachable", 0))
     }
 
     companion object {

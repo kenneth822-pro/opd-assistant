@@ -65,21 +65,35 @@ class LocalModelManager(private val app: Application) {
     private fun scanSttModels(): LocalModelList {
         val items = mutableListOf<LocalModel>()
         sttModelsDir.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
-            val hasEncoder = File(dir, "encoder.int8.onnx").exists()
-            val hasDecoder = File(dir, "decoder.int8.onnx").exists()
-            val hasTokens = File(dir, "tokens.txt").exists()
+            // Check both direct files and files in subdirectories
+            val encoder = findFile(dir, "encoder.int8.onnx")
+            val decoder = findFile(dir, "decoder.int8.onnx")
+            val tokens = findFile(dir, "tokens.txt")
+            val vad = findFile(dir, "silero_vad.onnx")
+            val hasEncoder = encoder != null
+            val hasDecoder = decoder != null
+            val hasTokens = tokens != null
+            val hasVad = vad != null
             val def = AvailableSttModels.ALL[dir.name]
             items.add(LocalModel(
                 id = dir.name,
                 name = def?.name ?: dir.name,
                 type = ModelType.STT,
                 path = dir,
-                isComplete = hasEncoder && hasDecoder && hasTokens,
+                isComplete = hasEncoder && hasDecoder && hasTokens && hasVad,
                 sizeBytes = def?.sizeBytes ?: 0,
                 language = def?.language ?: "Unknown"
             ))
         }
         return LocalModelList(items)
+    }
+
+    private fun findFile(dir: File, name: String): File? {
+        if (File(dir, name).exists()) return File(dir, name)
+        dir.listFiles()?.firstOrNull { it.isDirectory }?.let { subDir ->
+            if (File(subDir, name).exists()) return File(subDir, name)
+        }
+        return null
     }
 
     private fun scanLlmModels(): LocalModelList {
@@ -214,9 +228,28 @@ class LocalModelManager(private val app: Application) {
                 entry = tarIn.getNextTarEntry()
             }
             tarIn.close()
+            
+            // If files were extracted into a subdirectory, move them up
+            moveFilesFromSubdir(targetDir)
         } catch (e: Exception) {
             Log.e(TAG, "Tar extraction failed", e)
             throw e
+        }
+    }
+
+    private fun moveFilesFromSubdir(dir: File) {
+        val subdirs = dir.listFiles()?.filter { it.isDirectory } ?: emptyArray()
+        for (subdir in subdirs) {
+            subdir.listFiles()?.forEach { file ->
+                val dest = File(dir, file.name)
+                if (file.renameTo(dest)) {
+                    Log.i(TAG, "Moved ${file.name} from subdir to model dir")
+                }
+            }
+            // Clean up empty subdirectory
+            if (subdir.listFiles()?.isEmpty() == true) {
+                subdir.delete()
+            }
         }
     }
 

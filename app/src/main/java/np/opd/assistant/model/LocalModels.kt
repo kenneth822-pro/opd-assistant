@@ -43,7 +43,7 @@ object AvailableSttModels {
             name = "Whisper Tiny.en (English, ~117 MB)",
             url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.en.tar.bz2",
             sizeBytes = 117_000_000L,
-            files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"),
+            files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt", "silero_vad.onnx"),
             type = ModelType.STT,
             language = "English"
         ),
@@ -52,7 +52,7 @@ object AvailableSttModels {
             name = "Whisper Tiny (Multilingual 99 langs, ~200 MB)",
             url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2",
             sizeBytes = 200_000_000L,
-            files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"),
+            files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt", "silero_vad.onnx"),
             type = ModelType.STT,
             language = "Multilingual (99)"
         ),
@@ -61,7 +61,7 @@ object AvailableSttModels {
             name = "Whisper Base.en (English, ~200 MB)",
             url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.en.tar.bz2",
             sizeBytes = 200_000_000L,
-            files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"),
+            files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt", "silero_vad.onnx"),
             type = ModelType.STT,
             language = "English"
         ),
@@ -70,7 +70,7 @@ object AvailableSttModels {
             name = "Whisper Base (Multilingual 99 langs, ~350 MB)",
             url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2",
             sizeBytes = 350_000_000L,
-            files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"),
+            files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt", "silero_vad.onnx"),
             type = ModelType.STT,
             language = "Multilingual (99)"
         )

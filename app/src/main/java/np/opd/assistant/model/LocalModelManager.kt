@@ -157,22 +157,38 @@ class LocalModelManager(private val app: Application) {
         if (activeDownloads.containsKey(def.id)) return
 
         val job = scope.launch {
-            _downloadProgress.update { it.copy(active = def.id, progress = 0f, status = "Starting...") }
-            targetDir.mkdirs()
+            var retryCount = 0
+            val maxRetries = 3
+            
+            while (retryCount <= maxRetries) {
+                try {
+                    _downloadProgress.update { it.copy(active = def.id, progress = 0f, status = if (retryCount > 0) "Retry $retryCount of $maxRetries..." else "Starting...") }
+                    targetDir.mkdirs()
 
-            try {
-                if (def.url.endsWith(".tar.bz2")) {
-                    downloadAndExtractTarBz2(def.url, targetDir, def)
-                } else {
-                    downloadFiles(def.url, def.files, targetDir)
+                    try {
+                        if (def.url.endsWith(".tar.bz2")) {
+                            downloadAndExtractTarBz2(def.url, targetDir, def)
+                        } else {
+                            downloadFiles(def.url, def.files, targetDir)
+                        }
+                        _downloadProgress.update { it.copy(active = null, progress = 1f, status = "Complete") }
+                        refreshLists()
+                        return@launch // Success, exit retry loop
+                    } catch (e: Exception) {
+                        retryCount++
+                        if (retryCount > maxRetries) {
+                            throw e
+                        }
+                        Log.w(TAG, "Download failed for ${def.id}, retrying... (attempt $retryCount)", e)
+                        _downloadProgress.update { it.copy(progress = 0f, status = "Retry $retryCount of $maxRetries...") }
+                        delay(2000 * retryCount) // Exponential backoff
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Download failed for ${def.id} after $maxRetries retries", e)
+                    _downloadProgress.update { it.copy(active = null, progress = 0f, status = "Failed after $maxRetries retries: ${e.message}") }
+                } finally {
+                    activeDownloads.remove(def.id)
                 }
-                _downloadProgress.update { it.copy(active = null, progress = 1f, status = "Complete") }
-                refreshLists()
-            } catch (e: Exception) {
-                Log.e(TAG, "Download failed for ${def.id}", e)
-                _downloadProgress.update { it.copy(active = null, progress = 0f, status = "Failed: ${e.message}") }
-            } finally {
-                activeDownloads.remove(def.id)
             }
         }
         activeDownloads[def.id] = job

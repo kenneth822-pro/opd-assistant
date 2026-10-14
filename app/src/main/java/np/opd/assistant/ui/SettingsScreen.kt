@@ -193,6 +193,10 @@ internal fun LocalModelsSection(vm: SessionViewModel) {
         // STT Models
         SectionCard("Local Speech-to-Text (Whisper via Sherpa-ONNX)") {
             Muted("Download a model to enable offline transcription. Tiny is fast; Base is more accurate for Nepali.")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Muted("Models:")
+                TextButton(onClick = { vm.localModels.refreshLists() }) { Text("Refresh") }
+            }
             LocalModelsList(
                 models = sttModels,
                 availableModels = AvailableSttModels.ALL.values.filter { it.type == ModelType.STT }.toList(),
@@ -205,6 +209,10 @@ internal fun LocalModelsSection(vm: SessionViewModel) {
         // LLM Models
         SectionCard("Local LLM (ExecuTorch)") {
             Muted("Download a model to enable offline note generation and live suggestions. 1B is faster; 3B is more capable.")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Muted("Models:")
+                TextButton(onClick = { vm.localModels.refreshLists() }) { Text("Refresh") }
+            }
             LocalModelsList(
                 models = llmModels,
                 availableModels = AvailableLlmModels.ALL.values.filter { it.type == ModelType.LLM }.toList(),

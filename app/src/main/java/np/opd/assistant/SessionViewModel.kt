@@ -339,7 +339,18 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         m.provider == Provider.CUSTOM && settings.customBaseUrl.isBlank() -> "Enter the custom server address in Settings."
         m.provider.isLocal -> {
             val modelDir = localModels.getModelDir(m.id, if (m.provider == Provider.LOCAL_WHISPER) np.opd.assistant.model.ModelType.STT else np.opd.assistant.model.ModelType.LLM)
-            if (modelDir == null || !modelDir.exists()) "Local model not downloaded: ${m.name}" else null
+            if (modelDir == null || !modelDir.exists()) "Local model not downloaded: ${m.name}" else {
+                // Additional validation for local models
+                when (m.provider) {
+                    Provider.LOCAL_WHISPER -> {
+                        if (!LocalWhisperClient.isValidModelDir(modelDir)) "Local Whisper model files incomplete: ${m.name}" else null
+                    }
+                    Provider.LOCAL_LLM -> {
+                        if (!LocalLlmClient.isValidModelDir(modelDir)) "Local LLM model files incomplete: ${m.name}" else null
+                    }
+                    else -> null
+                }
+            }
         }
         m.provider != Provider.CUSTOM && key(m.provider).isBlank() -> "Add your ${m.provider.label} key in Settings."
         else -> null

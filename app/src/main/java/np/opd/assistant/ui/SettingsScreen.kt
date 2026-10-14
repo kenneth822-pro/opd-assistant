@@ -320,7 +320,9 @@ private fun ModelPickerDialog(
     var provider by remember { mutableStateOf(initial) }
     var query by remember { mutableStateOf("") }
     var freeOnly by remember { mutableStateOf(false) }
-    val source = models[provider] ?: emptyList()
+    // Observe models to refresh when they change
+    val modelsByProvider = models
+    val source = modelsByProvider[provider] ?: emptyList()
     val q = query.trim().lowercase()
     val list = source.filter { m ->
         accept(m) && (!freeOnly || m.free == true) &&
@@ -332,7 +334,7 @@ private fun ModelPickerDialog(
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Provider.entries.forEach { p ->
-                        val n = models[p]?.count(accept) ?: 0
+                        val n = modelsByProvider[p]?.count(accept) ?: 0
                         val label = p.label.substringBefore(" (") + if (n > 0) " ($n)" else ""
                         if (p == provider) Button(onClick = { provider = p }) { Text(label, fontSize = 12.sp) }
                         else OutlinedButton(onClick = { provider = p }) { Text(label, fontSize = 12.sp) }
@@ -347,8 +349,12 @@ private fun ModelPickerDialog(
                 if (provider == Provider.GEMINI) Muted("Gemini cost depends on your key: free tier (rate-limited) or paid.")
                 loading?.let { Text(it, fontSize = 12.sp) }
                 if (source.isEmpty()) {
-                    Muted("No ${provider.label} models loaded yet. Save a key in Settings first.")
-                    OutlinedButton(onClick = { onLoad(provider) }) { Text("Load ${provider.label.substringBefore(" (")} models") }
+                    Muted("No ${provider.label} models loaded yet.")
+                    if (provider.isLocal) {
+                        Muted("Models are scanned from device storage automatically.")
+                    } else {
+                        OutlinedButton(onClick = { onLoad(provider) }) { Text("Load ${provider.label.substringBefore(" (")} models") }
+                    }
                 } else if (list.isEmpty()) {
                     Muted("No models here match.")
                 }

@@ -203,11 +203,13 @@ object ModelDirectory {
                     val encoder = File(modelDir, "encoder.int8.onnx")
                     val decoder = File(modelDir, "decoder.int8.onnx")
                     val tokens = File(modelDir, "tokens.txt")
-                    if (encoder.exists() && decoder.exists() && tokens.exists()) {
+                    val vad = File(modelDir, "silero_vad.onnx")
+                    if (encoder.exists() && decoder.exists() && tokens.exists() && vad.exists()) {
                         val isMultilingual = !modelDir.name.contains(".en")
+                        // modelDir.name is already the full model ID (e.g., "sherpa-onnx-whisper-tiny")
                         out += ModelInfo(
                             provider = Provider.LOCAL_WHISPER,
-                            id = "sherpa-onnx-${modelDir.name}",
+                            id = modelDir.name,
                             name = "Whisper ${modelDir.name.replace("sherpa-onnx-", "").uppercase()} (Local)",
                             audioInput = true,
                             free = true,
@@ -227,7 +229,7 @@ object ModelDirectory {
             if (assets.isNotEmpty()) {
                 out += ModelInfo(
                     provider = Provider.LOCAL_WHISPER,
-                    id = "sherpa-onnx-whisper-tiny.en-bundled",
+                    id = "sherpa-onnx-whisper-tiny.en",
                     name = "Whisper Tiny.en (Bundled, Local)",
                     audioInput = true,
                     free = true,
@@ -248,7 +250,7 @@ object ModelDirectory {
                 val modelName = file.nameWithoutExtension
                 out += ModelInfo(
                     provider = Provider.LOCAL_LLM,
-                    id = "executorch-$modelName",
+                    id = modelName,
                     name = "LLM $modelName (Local)",
                     audioInput = false,
                     free = true,

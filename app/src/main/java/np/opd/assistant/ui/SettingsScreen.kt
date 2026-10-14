@@ -41,11 +41,14 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import np.opd.assistant.Screen
 import np.opd.assistant.SessionViewModel
 import np.opd.assistant.UiState
 import np.opd.assistant.ai.ModelInfo
 import np.opd.assistant.ai.Provider
+import np.opd.assistant.model.LocalModelManager
+import np.opd.assistant.model.ModelType
 
 private enum class PickerTarget { SPEECH, NOTES, BACKUP }
 
@@ -55,6 +58,8 @@ private fun limitsNote(p: Provider): String = when (p) {
     Provider.OPENCODE -> "OpenCode Zen gives one key for a curated set of coding/agent models; some are free for a limited time. They are text models: use them for notes, not for speech."
     Provider.GROQ -> "Whisper (speech-to-text) here is fast and handles Nepali reasonably; pair it with a notes model. Speakers are not labelled by Whisper; the notes model infers them."
     Provider.CUSTOM -> "For a server on your network, e.g. LM Studio or Ollama (address like http://192.168.1.20:1234/v1). Leave the key empty if the server needs none."
+    Provider.LOCAL_WHISPER -> "Runs entirely offline on your device using Sherpa-ONNX. No API key needed. Download a model first (Settings → Local Models). Whisper Tiny is fast; Base is more accurate for Nepali."
+    Provider.LOCAL_LLM -> "Runs entirely offline on your device using ExecuTorch. No API key needed. Download a model first (Settings → Local Models). Llama 3.2 1B is fast; 3B is more capable for medical notes."
 }
 
 @Composable
@@ -143,6 +148,12 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
                 if (st.backupModel != null) TextButton(onClick = { vm.chooseBackupModel(null) }) { Text("Remove") }
             }
         }
+
+        // Local Models Section
+        Text("Local Models (Offline)", style = MaterialTheme.typography.titleMedium)
+        Muted("Run entirely on-device — no API keys, no internet required after download.")
+        LocalModelsSection(vm)
+
         OutlinedButton(onClick = { vm.testModels() }, modifier = Modifier.fillMaxWidth()) { Text("Test selected models") }
         st.testResult?.let { Text(it, fontSize = 13.sp) }
 
@@ -169,6 +180,7 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
 private fun ProviderCard(p: Provider, st: UiState, vm: SessionViewModel) {
     val hasKey = p in st.keys
     val loaded = st.models[p]?.size ?: 0
+    val isLocal = p.isLocal
     var open by remember { mutableStateOf(p == Provider.GEMINI && !hasKey) }
     var keyText by remember { mutableStateOf("") }
     var url by remember { mutableStateOf(st.customBaseUrl) }
@@ -182,6 +194,7 @@ private fun ProviderCard(p: Provider, st: UiState, vm: SessionViewModel) {
             Text(p.label, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             if (hasKey) Pill("key ✓", Palette.okBg, Palette.okFg)
             if (loaded > 0) Pill("$loaded models", Palette.greyBg, Palette.greyFg)
+            if (isLocal) Pill("Local", Palette.infoBg, Palette.infoFg)
             Text(if (open) "▾" else "▸", fontSize = 18.sp)
         }
         if (open) {
@@ -197,20 +210,26 @@ private fun ProviderCard(p: Provider, st: UiState, vm: SessionViewModel) {
                 )
                 OutlinedButton(onClick = { vm.setCustomBaseUrl(url) }, enabled = url != st.customBaseUrl) { Text("Save address") }
             }
-            OutlinedTextField(
-                value = keyText,
-                onValueChange = { keyText = it.trim() },
-                label = { Text(if (hasKey) "Paste a new key to replace" else "Paste API key") },
-                singleLine = true,
-                visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { vm.saveKey(p, keyText); keyText = "" }, enabled = keyText.isNotBlank()) { Text("Save") }
-                OutlinedButton(onClick = { vm.loadModels(p) }) { Text("Load models") }
-                TextButton(onClick = { show = !show }) { Text(if (show) "Hide" else "Show") }
+            if (!isLocal) {
+                OutlinedTextField(
+                    value = keyText,
+                    onValueChange = { keyText = it.trim() },
+                    label = { Text(if (hasKey) "Paste a new key to replace" else "Paste API key") },
+                    singleLine = true,
+                    visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = { vm.saveKey(p, keyText); keyText = "" }, enabled = keyText.isNotBlank()) { Text("Save") }
+                    TextButton(onClick = { show = !show }) { Text(if (show) "Hide" else "Show") }
+                }
+                if (hasKey) TextButton(onClick = { vm.removeKey(p) }) { Text("Remove key", color = Palette.greyFg) }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { vm.loadModels(p) }) { Text("Load models") }
+                }
+                Muted("No API key needed. Models run entirely on your device.")
             }
-            if (hasKey) TextButton(onClick = { vm.removeKey(p) }) { Text("Remove key", color = Palette.greyFg) }
             Muted(limitsNote(p))
         }
     }
@@ -234,6 +253,125 @@ internal fun TagPill(tag: String) = when (tag) {
     "AUDIO" -> Pill("AUDIO", Palette.infoBg, Palette.infoFg)
     "SPEECH-TO-TEXT" -> Pill("SPEECH-TO-TEXT", Palette.infoBg, Palette.infoFg)
     else -> Pill(tag, Palette.greyBg, Palette.greyFg)
+}
+
+@Composable
+internal fun LocalModelsSection(vm: SessionViewModel) {
+    val sttModels by vm.localModels.sttModels.collectAsStateWithLifecycle()
+    val llmModels by vm.localModels.llmModels.collectAsStateWithLifecycle()
+    val downloadProgress by vm.localModels.downloadProgress.collectAsStateWithLifecycle()
+
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // STT Models
+        SectionCard("Local Speech-to-Text (Whisper via Sherpa-ONNX)") {
+            Muted("Download a model to enable offline transcription. Tiny is fast; Base is more accurate for Nepali.")
+            LocalModelsList(
+                models = sttModels,
+                availableModels = LocalModelManager.AVAILABLE_STT_MODELS.values.filter { it.type == ModelType.STT }.toList(),
+                onDownload = { vm.localModels.downloadSttModel(it) },
+                onDelete = { vm.localModels.deleteModel(it) },
+                downloadProgress = downloadProgress
+            )
+        }
+
+        // LLM Models
+        SectionCard("Local LLM (ExecuTorch)") {
+            Muted("Download a model to enable offline note generation and live suggestions. 1B is faster; 3B is more capable.")
+            LocalModelsList(
+                models = llmModels,
+                availableModels = LocalModelManager.AVAILABLE_LLM_MODELS.values.filter { it.type == ModelType.LLM }.toList(),
+                onDownload = { vm.localModels.downloadLlmModel(it) },
+                onDelete = { vm.localModels.deleteModel(it) },
+                downloadProgress = downloadProgress
+            )
+        }
+
+        // Global download progress
+        if (downloadProgress.active != null) {
+            SectionCard("Downloading ${downloadProgress.active}") {
+                LinearProgressIndicator(progress = downloadProgress.progress, modifier = Modifier.fillMaxWidth())
+                Text(downloadProgress.status, fontSize = 12.sp, color = Palette.greyFg)
+                if (downloadProgress.progress > 0f && downloadProgress.progress < 1f) {
+                    TextButton(onClick = { 
+                        val active = downloadProgress.active
+                        if (active != null) vm.localModels.cancelDownload(active) 
+                    }) { Text("Cancel") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocalModelsList(
+    models: LocalModelManager.LocalModelList,
+    availableModels: List<LocalModelManager.ModelDef>,
+    onDownload: (String) -> Unit,
+    onDelete: (LocalModelManager.LocalModel) -> Unit,
+    downloadProgress: LocalModelManager.DownloadProgress
+) {
+    // Show downloaded models
+    if (models.items.isNotEmpty()) {
+        Text("Downloaded", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        models.items.forEach { model ->
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(model.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text("${model.language} · ${formatSize(model.sizeBytes)} · ${if (model.isComplete) "Ready" else "Incomplete"}", fontSize = 11.sp, color = Palette.greyFg)
+                }
+                if (!model.isComplete) {
+                    Text("Incomplete", color = Palette.urgentFg, fontSize = 12.sp)
+                }
+                if (downloadProgress.active != model.id) {
+                    OutlinedButton(onClick = { onDelete(model) }, colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = Palette.urgentFg)) { Text("Delete") }
+                }
+            }
+            HorizontalDivider()
+        }
+    }
+
+    // Show available models not yet downloaded
+    val downloadedIds = models.availableIds
+    val notDownloaded = availableModels.filter { it.id !in downloadedIds }
+    if (notDownloaded.isNotEmpty()) {
+        Text("Available to Download", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        notDownloaded.forEach { def ->
+            val isDownloading = downloadProgress.active == def.id
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(def.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text("${def.language} · ${formatSize(def.sizeBytes)}", fontSize = 11.sp, color = Palette.greyFg)
+                }
+                if (isDownloading) {
+                    LinearProgressIndicator(progress = downloadProgress.progress, modifier = Modifier.width(100.dp))
+                } else {
+                    Button(onClick = { onDownload(def.id) }) { Text("Download") }
+                }
+            }
+            HorizontalDivider()
+        }
+    }
+    
+    if (models.items.isEmpty() && notDownloaded.isEmpty()) {
+        Muted("No models available.")
+    }
+}
+
+private fun formatSize(bytes: Long): String {
+    return when {
+        bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
+        bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
+        bytes >= 1_000 -> "%.1f KB".format(bytes / 1000.0)
+        else -> "$bytes B"
+    }
 }
 
 @Composable

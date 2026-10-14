@@ -20,10 +20,13 @@ import np.opd.assistant.ai.AiClient
 import np.opd.assistant.ai.AiPart
 import np.opd.assistant.ai.ApiException
 import np.opd.assistant.ai.GeminiClient
+import np.opd.assistant.ai.LocalLlmClient
+import np.opd.assistant.ai.LocalWhisperClient
 import np.opd.assistant.ai.ModelDirectory
 import np.opd.assistant.ai.ModelInfo
 import np.opd.assistant.ai.OpenAiCompatClient
 import np.opd.assistant.ai.Provider
+import np.opd.assistant.model.LocalModelManager
 import np.opd.assistant.audio.WavSegmentRecorder
 import np.opd.engine.CaseState
 import np.opd.engine.CatalogueIntegrity
@@ -102,6 +105,7 @@ data class UiState(
 class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     val settings = SettingsStore(app)
+    val localModels = LocalModelManager(app)
 
     val catalogues: Catalogues?
     val catalogueProblems: List<String>
@@ -220,6 +224,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                 val list = when (provider) {
                     Provider.GEMINI -> ModelDirectory.gemini(key(Provider.GEMINI))
                     Provider.OPENROUTER -> ModelDirectory.openRouter()
+                    Provider.LOCAL_WHISPER, Provider.LOCAL_LLM -> ModelDirectory.localModels(getApplication<Application>())
                     else -> ModelDirectory.openAiCompatible(provider, settings.baseUrlFor(provider), key(provider))
                 }
                 if (list.isEmpty()) {
@@ -315,11 +320,27 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun clientFor(m: ModelInfo, attempts: Int = 4, fast: Boolean = false): AiClient = when (m.provider) {
         Provider.GEMINI -> GeminiClient(key(Provider.GEMINI), m, attempts, fast)
+        Provider.LOCAL_WHISPER -> {
+            val modelDir = localModels.getModelDir(m.id, np.opd.assistant.model.ModelType.STT)
+                ?: throw ApiException("Local Whisper model not found: ${m.id}")
+            LocalWhisperClient(getApplication<Application>(), modelDir)
+        }
+        Provider.LOCAL_LLM -> {
+            val modelDir = localModels.getModelDir(m.id, np.opd.assistant.model.ModelType.LLM)
+                ?: throw ApiException("Local LLM model not found: ${m.id}")
+            val (pteFile, tokenizerFile) = np.opd.assistant.ai.LocalLlmClient.findModelFiles(modelDir)
+                ?: throw ApiException("Local LLM model files incomplete: ${m.id}")
+            LocalLlmClient(pteFile, tokenizerFile)
+        }
         else -> OpenAiCompatClient(settings.baseUrlFor(m.provider), key(m.provider), m, attempts)
     }
 
     private fun missingAccess(m: ModelInfo): String? = when {
         m.provider == Provider.CUSTOM && settings.customBaseUrl.isBlank() -> "Enter the custom server address in Settings."
+        m.provider.isLocal -> {
+            val modelDir = localModels.getModelDir(m.id, if (m.provider == Provider.LOCAL_WHISPER) np.opd.assistant.model.ModelType.STT else np.opd.assistant.model.ModelType.LLM)
+            if (modelDir == null || !modelDir.exists()) "Local model not downloaded: ${m.name}" else null
+        }
         m.provider != Provider.CUSTOM && key(m.provider).isBlank() -> "Add your ${m.provider.label} key in Settings."
         else -> null
     }

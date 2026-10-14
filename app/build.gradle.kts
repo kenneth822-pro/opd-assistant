@@ -72,4 +72,13 @@ dependencies {
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // Sherpa-ONNX (Local Whisper STT with VAD)
+    implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.8")
+
+    // ExecuTorch (Local LLM)
+    implementation("org.pytorch:executorch-android:1.0.0")
+
+    // Apache Commons Compress for tar.bz2 extraction
+    implementation("org.apache.commons:commons-compress:1.26.1")
 }

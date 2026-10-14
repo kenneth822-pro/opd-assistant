@@ -14,9 +14,12 @@ enum class Provider(val label: String, val defaultBaseUrl: String?, val keyHelp:
     OPENROUTER("OpenRouter", "https://openrouter.ai/api/v1", "Key at openrouter.ai/keys. Many models, some free."),
     OPENCODE("OpenCode Zen", "https://opencode.ai/zen/v1", "Key at opencode.ai/zen. Curated models, some free for a limited time."),
     GROQ("Groq", "https://api.groq.com/openai/v1", "Key at console.groq.com/keys. Very fast; Whisper speech-to-text and open models; free tier with limits."),
-    CUSTOM("Custom (OpenAI-compatible)", null, "Any server with /models and /chat/completions (e.g. a local LLM server).");
+    CUSTOM("Custom (OpenAI-compatible)", null, "Any server with /models and /chat/completions (e.g. a local LLM server)."),
+    LOCAL_WHISPER("Local Whisper (Sherpa-ONNX)", null, "Runs offline on device. Download model in Settings."),
+    LOCAL_LLM("Local LLM (ExecuTorch)", null, "Runs offline on device. Download model in Settings.");
 
     val openAiCompatible: Boolean get() = this != GEMINI
+    val isLocal: Boolean get() = this == LOCAL_WHISPER || this == LOCAL_LLM
 }
 
 /** One model the user can pick. free = null means "depends on your key/plan". */
@@ -183,5 +186,77 @@ object ModelDirectory {
         id.contains("pro") -> 1
         id.contains("lite") -> 2
         else -> 3
+    }
+
+    /** Local models available on device (downloaded or bundled). */
+    suspend fun localModels(context: android.content.Context): List<ModelInfo> = withContext(Dispatchers.IO) {
+        val out = mutableListOf<ModelInfo>()
+        val modelsDir = File(context.filesDir, "models")
+        
+        // Local Whisper models (Sherpa-ONNX)
+        val sttDir = File(modelsDir, "stt")
+        if (sttDir.exists()) {
+            sttDir.listFiles()?.forEach { modelDir ->
+                if (modelDir.isDirectory) {
+                    val encoder = File(modelDir, "encoder.int8.onnx")
+                    val decoder = File(modelDir, "decoder.int8.onnx")
+                    val tokens = File(modelDir, "tokens.txt")
+                    if (encoder.exists() && decoder.exists() && tokens.exists()) {
+                        val isMultilingual = !modelDir.name.contains(".en")
+                        out += ModelInfo(
+                            provider = Provider.LOCAL_WHISPER,
+                            id = "sherpa-onnx-${modelDir.name}",
+                            name = "Whisper ${modelDir.name.replace("sherpa-onnx-", "").uppercase()} (Local)",
+                            audioInput = true,
+                            free = true,
+                            structuredOutput = false,
+                            jsonMode = false,
+                            transcriptionApi = true,
+                            contextLength = null
+                        )
+                    }
+                }
+            }
+        }
+        
+        // Bundled Whisper tiny.en (if present in assets)
+        try {
+            val assets = context.assets.list("sherpa-onnx-whisper-tiny.en") ?: emptyArray()
+            if (assets.isNotEmpty()) {
+                out += ModelInfo(
+                    provider = Provider.LOCAL_WHISPER,
+                    id = "sherpa-onnx-whisper-tiny.en-bundled",
+                    name = "Whisper Tiny.en (Bundled, Local)",
+                    audioInput = true,
+                    free = true,
+                    structuredOutput = false,
+                    jsonMode = false,
+                    transcriptionApi = true,
+                    contextLength = null
+                )
+            }
+        } catch (e: Exception) {
+            // Asset not bundled
+        }
+
+        // Local LLM models (ExecuTorch .pte files)
+        val llmDir = File(modelsDir, "llm")
+        if (llmDir.exists()) {
+            llmDir.listFiles()?.filter { it.extension == "pte" }?.forEach { file ->
+                val modelName = file.nameWithoutExtension
+                out += ModelInfo(
+                    provider = Provider.LOCAL_LLM,
+                    id = "executorch-$modelName",
+                    name = "LLM $modelName (Local)",
+                    audioInput = false,
+                    free = true,
+                    structuredOutput = true,
+                    jsonMode = true,
+                    contextLength = 4096
+                )
+            }
+        }
+
+        out.sortedBy { it.id }
     }
 }

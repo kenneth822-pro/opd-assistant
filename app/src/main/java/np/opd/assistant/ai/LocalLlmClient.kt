@@ -61,7 +61,8 @@ class LocalLlmClient(
         return null // Local LLM doesn't do transcription
     }
 
-    override suspend fun generate(system: String?, parts: List<AiPart>, schema: J.Obj?): String = withContext(Dispatchers.IO) {
+    override suspend fun generate(system: String?, parts: List<AiPart>, schema: J.Obj?): String {
+        // This is a blocking call, but we don't use coroutines here since it's a stub
         ensureInitialized()
         
         // STUB: Return a test JSON response

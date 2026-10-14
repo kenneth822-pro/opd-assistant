@@ -43,13 +43,15 @@ class LocalWhisperClient(
     private fun ensureInitialized() {
         if (initialized) return
         try {
-            // VAD config (Silero VAD)
+            // VAD config (Silero VAD) - use the correct API for sherpa-onnx v1.13.8
             val vadConfig = Vad.VadModelConfig()
-            vadConfig.sileroVad.model = File(modelDir, "silero_vad.onnx").absolutePath
-            vadConfig.sileroVad.threshold = 0.5f
-            vadConfig.sileroVad.minSpeechDuration = 0.25f
-            vadConfig.sileroVad.minSilenceDuration = 0.5f
-            vadConfig.sileroVad.windowSize = 512
+            vadConfig.sileroVad = Vad.SileroVadModelConfig().apply {
+                model = File(modelDir, "silero_vad.onnx").absolutePath
+                threshold = 0.5f
+                minSpeechDuration = 0.25f
+                minSilenceDuration = 0.5f
+                windowSize = 512
+            }
             vadConfig.numThreads = 2
             vadConfig.debug = false
             vadConfig.provider = "cpu"
@@ -57,21 +59,30 @@ class LocalWhisperClient(
 
             // Whisper offline recognizer config
             val recognizerConfig = OfflineRecognizerConfig()
-            recognizerConfig.featConfig.sampleRate = 16000
-            recognizerConfig.featConfig.featureDim = 80
-            recognizerConfig.modelConfig.tokens = File(modelDir, "tokens.txt").absolutePath
-            recognizerConfig.modelConfig.numThreads = 2
-            recognizerConfig.modelConfig.debug = false
-            recognizerConfig.modelConfig.provider = "cpu"
-            
-            // Whisper-specific config
-            recognizerConfig.modelConfig.whisper.encoder = File(modelDir, "encoder.int8.onnx").absolutePath
-            recognizerConfig.modelConfig.whisper.decoder = File(modelDir, "decoder.int8.onnx").absolutePath
-            recognizerConfig.modelConfig.whisper.language = "auto"
-            recognizerConfig.modelConfig.whisper.task = "transcribe"
-            recognizerConfig.modelConfig.whisper.tailPaddings = 1000
+            recognizerConfig.featConfig = com.k2fsa.sherpa.onnx.FeatureConfig().apply {
+                sampleRate = 16000
+                featureDim = 80
+            }
+            recognizerConfig.modelConfig = com.k2fsa.sherpa.onnx.OfflineModelConfig().apply {
+                tokens = File(modelDir, "tokens.txt").absolutePath
+                numThreads = 2
+                debug = false
+                provider = "cpu"
+                modelType = "whisper"
+                whisper = com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig().apply {
+                    encoder = File(modelDir, "encoder.int8.onnx").absolutePath
+                    decoder = File(modelDir, "decoder.int8.onnx").absolutePath
+                    language = "auto"
+                    task = "transcribe"
+                    tailPaddings = 1000
+                }
+            }
             
             recognizer = OfflineRecognizer(context.assets, recognizerConfig)
+            
+            // Create VAD instance
+            vad = Vad(context.assets, vadConfig)
+            
             initialized = true
             Log.i(TAG, "Initialized Sherpa-ONNX Whisper from $modelDir")
         } catch (e: Exception) {

@@ -6,15 +6,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import np.opd.engine.J
 import np.opd.engine.Prompts
+import org.pytorch.executorch.extension.llm.LlmModule
+import org.pytorch.executorch.extension.llm.LlmModuleConfig
+import org.pytorch.executorch.extension.llm.LlmCallback
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Local LLM using ExecuTorch (LlmModule).
  * Runs entirely on-device for note generation and live suggestions.
- * 
- * NOTE: This uses a stub implementation that compiles. The actual ExecuTorch integration
- * requires proper API usage which varies by version. Replace with real implementation
- * when testing on device with known library version.
  */
 class LocalLlmClient(
     private val modelFile: File,
@@ -22,6 +23,7 @@ class LocalLlmClient(
 ) : AiClient {
 
     private val TAG = "LocalLlmClient"
+    private var module: LlmModule? = null
     private var initialized = false
 
     override val model: ModelInfo = ModelInfo(
@@ -39,18 +41,15 @@ class LocalLlmClient(
     private fun ensureInitialized() {
         if (initialized) return
         try {
-            // TODO: Initialize ExecuTorch LlmModule here
-            // This requires the actual ExecuTorch Kotlin API which varies by version
-            // Example structure:
-            // val config = LlmModuleConfig()
-            //     .modulePath(modelFile.absolutePath)
-            //     .tokenizerPath(tokenizerFile.absolutePath)
-            //     .temperature(0.1f)
-            //     .build()
-            // module = LlmModule(config)
+            val config = LlmModuleConfig()
+                .modulePath(modelFile.absolutePath)
+                .tokenizerPath(tokenizerFile.absolutePath)
+                .temperature(0.1f)
+                .build()
             
+            module = LlmModule(config)
             initialized = true
-            Log.i(TAG, "Initialized ExecuTorch LLM from ${modelFile.name} (STUB - replace with real implementation)")
+            Log.i(TAG, "Initialized ExecuTorch LLM from ${modelFile.name}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize local LLM", e)
             throw ApiException("Failed to initialize local LLM: ${e.message}")
@@ -61,20 +60,73 @@ class LocalLlmClient(
         return null // Local LLM doesn't do transcription
     }
 
-    override suspend fun generate(system: String?, parts: List<AiPart>, schema: J.Obj?): String {
-        // This is a blocking call, but we don't use coroutines here since it's a stub
+    override suspend fun generate(system: String?, parts: List<AiPart>, schema: J.Obj?): String = withContext(Dispatchers.IO) {
         ensureInitialized()
+        val module = this.module ?: throw ApiException("LLM module not initialized")
+
+        // Build prompt from system + parts
+        val prompt = buildPrompt(system, parts, schema)
         
-        // STUB: Return a test JSON response
-        // Real implementation would use ExecuTorch LlmModule
-        Log.i(TAG, "generate() called (STUB) - returning test JSON")
-        
-        // Return a minimal valid JSON for testing
-        if (schema != null) {
-            // Try to construct a minimal valid response based on schema
-            return "{}"
+        // Use CountDownLatch to bridge callback-based API to suspend function
+        val latch = CountDownLatch(1)
+        val resultRef = AtomicReference<String>()
+        val errorRef = AtomicReference<Exception>()
+
+        val callback = object : LlmCallback {
+            override fun onResult(result: String) {
+                resultRef.set(result)
+                latch.countDown()
+            }
         }
-        return "{}"
+
+        module!!.generate(prompt, callback)
+        
+        // Wait for generation to complete
+        val completed = latch.await(120, java.util.concurrent.TimeUnit.SECONDS)
+        if (!completed) {
+            throw ApiException("LLM generation timed out")
+        }
+
+        val error = errorRef.get()
+        if (error != null) throw error
+
+        val result = resultRef.get() ?: ""
+        if (result.isBlank()) throw ApiException("LLM returned empty response")
+
+        extractJson(result)
+    }
+
+    /** Builds a prompt from system instructions, parts, and optional JSON schema. */
+    private fun buildPrompt(system: String?, parts: List<AiPart>, schema: J.Obj?): String {
+        val sb = StringBuilder()
+        
+        if (system != null && system.isNotBlank()) {
+            sb.append("SYSTEM:\n").append(system).append("\n\n")
+        }
+        
+        if (schema != null) {
+            sb.append("OUTPUT FORMAT: Reply with ONE JSON object only (no markdown, no commentary) matching this schema:\n")
+            sb.append(Prompts.toJsonSchema(schema).toJson()).append("\n\n")
+        }
+        
+        sb.append("USER:\n")
+        for (part in parts) {
+            when (part) {
+                is AiPart.Text -> sb.append(part.text).append("\n")
+                is AiPart.Wav -> sb.append("[AUDIO DATA - not supported by local LLM]\n")
+            }
+        }
+        
+        return sb.toString()
+    }
+
+    /** Extracts JSON from model output, handling reasoning tags and markdown. */
+    private fun extractJson(text: String): String {
+        var t = text.replace(Regex("(?s)style=\"display: none;\">.*?style=\"display: none;\">"), "")
+        t = t.replace(Regex("(?s)```(?:json)?\n(.*?)\n```"), "$1")
+        val start = t.indexOf('{')
+        val end = t.lastIndexOf('}')
+        return if (start >= 0 && end > start) t.substring(start, end + 1) else t
     }
 
     companion object {

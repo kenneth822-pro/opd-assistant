@@ -2,6 +2,10 @@ package np.opd.assistant.ai
 
 import android.content.Context
 import android.util.Log
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
+import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
+import com.k2fsa.sherpa.onnx.OfflineStream
+import com.k2fsa.sherpa.onnx.Vad
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import np.opd.engine.TranscriptLine
@@ -13,10 +17,6 @@ import java.nio.ByteOrder
 /**
  * Local Whisper STT using Sherpa-ONNX.
  * Runs entirely on-device with VAD (Voice Activity Detection) and ASR.
- * 
- * NOTE: This uses a stub implementation that compiles. The actual Sherpa-ONNX integration
- * requires proper API usage which varies by version. Replace with real implementation
- * when testing on device with known library version.
  */
 class LocalWhisperClient(
     private val context: Context,
@@ -24,6 +24,8 @@ class LocalWhisperClient(
 ) : AiClient {
 
     private val TAG = "LocalWhisperClient"
+    private var recognizer: OfflineRecognizer? = null
+    private var vad: Vad? = null
     private var initialized = false
 
     override val model: ModelInfo = ModelInfo(
@@ -41,16 +43,37 @@ class LocalWhisperClient(
     private fun ensureInitialized() {
         if (initialized) return
         try {
-            // TODO: Initialize Sherpa-ONNX OfflineRecognizer and Vad here
-            // This requires the actual Sherpa-ONNX Kotlin API which varies by version
-            // Example structure:
-            // val vadConfig = Vad.VadModelConfig().apply { ... }
-            // vad = Vad(context.assets, vadConfig)
-            // val recognizerConfig = OfflineRecognizerConfig().apply { ... }
-            // recognizer = OfflineRecognizer(context.assets, recognizerConfig)
+            // VAD config (Silero VAD)
+            val vadConfig = Vad.VadModelConfig()
+            vadConfig.sileroVad.model = File(modelDir, "silero_vad.onnx").absolutePath
+            vadConfig.sileroVad.threshold = 0.5f
+            vadConfig.sileroVad.minSpeechDuration = 0.25f
+            vadConfig.sileroVad.minSilenceDuration = 0.5f
+            vadConfig.sileroVad.windowSize = 512
+            vadConfig.numThreads = 2
+            vadConfig.debug = false
+            vadConfig.provider = "cpu"
+            vad = Vad(context.assets, vadConfig)
+
+            // Whisper offline recognizer config
+            val recognizerConfig = OfflineRecognizerConfig()
+            recognizerConfig.featConfig.sampleRate = 16000
+            recognizerConfig.featConfig.featureDim = 80
+            recognizerConfig.modelConfig.tokens = File(modelDir, "tokens.txt").absolutePath
+            recognizerConfig.modelConfig.numThreads = 2
+            recognizerConfig.modelConfig.debug = false
+            recognizerConfig.modelConfig.provider = "cpu"
             
+            // Whisper-specific config
+            recognizerConfig.modelConfig.whisper.encoder = File(modelDir, "encoder.int8.onnx").absolutePath
+            recognizerConfig.modelConfig.whisper.decoder = File(modelDir, "decoder.int8.onnx").absolutePath
+            recognizerConfig.modelConfig.whisper.language = "auto"
+            recognizerConfig.modelConfig.whisper.task = "transcribe"
+            recognizerConfig.modelConfig.whisper.tailPaddings = 1000
+            
+            recognizer = OfflineRecognizer(context.assets, recognizerConfig)
             initialized = true
-            Log.i(TAG, "Initialized Sherpa-ONNX Whisper from $modelDir (STUB - replace with real implementation)")
+            Log.i(TAG, "Initialized Sherpa-ONNX Whisper from $modelDir")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize local Whisper", e)
             throw ApiException("Failed to initialize local Whisper model: ${e.message}")
@@ -64,10 +87,90 @@ class LocalWhisperClient(
     override suspend fun transcribe(wav: ByteArray, contextHint: String): List<TranscriptLine> = withContext(Dispatchers.IO) {
         ensureInitialized()
         
-        // STUB: Return a test transcript line to verify the model is reachable
-        // Real implementation would use Sherpa-ONNX OfflineRecognizer
-        Log.i(TAG, "transcribe() called (STUB) - returning test transcript")
-        listOf(TranscriptLine("test", "[STUB] Local Whisper model reachable", 0))
+        val recognizer = this.recognizer ?: throw ApiException("Recognizer not initialized")
+        val vad = this.vad ?: throw ApiException("VAD not initialized")
+
+        // Convert WAV bytes to FloatArray (16kHz mono, 16-bit PCM)
+        val samples = wavToFloatArray(wav)
+        if (samples.isEmpty()) return@withContext emptyList()
+
+        // Run VAD to get speech segments
+        val segments = mutableListOf<FloatArray>()
+        vad.acceptWaveform(samples)
+        while (!vad.empty()) {
+            val segment = vad.front()
+            segments.add(segment.samples.copyOf())
+            vad.pop()
+        }
+
+        if (segments.isEmpty()) return@withContext emptyList()
+
+        // Run ASR on each segment
+        val results = mutableListOf<TranscriptLine>()
+        var offsetMs = 0L
+        
+        for (segmentSamples in segments) {
+            val stream: OfflineStream = recognizer.createStream()
+            try {
+                stream.acceptWaveform(segmentSamples, 16000)
+                recognizer.decode(stream)
+                val result = recognizer.getResult(stream)
+                val text = result.text.trim()
+                if (text.isNotEmpty()) {
+                    results.add(TranscriptLine("unknown", text, offsetMs.toLong()))
+                }
+                offsetMs += (segmentSamples.size * 1000L / 16000)
+            } finally {
+                stream.release()
+            }
+        }
+
+        if (results.isEmpty()) {
+            // Fallback: try to transcribe the whole audio without VAD
+            val stream = recognizer.createStream()
+            try {
+                stream.acceptWaveform(samples, 16000)
+                recognizer.decode(stream)
+                val result = recognizer.getResult(stream)
+                val text = result.text.trim()
+                if (text.isNotEmpty()) {
+                    return@withContext listOf(TranscriptLine("unknown", text, 0))
+                }
+            } finally {
+                stream.release()
+            }
+        }
+
+        results
+    }
+
+    /** Converts 16-bit PCM WAV bytes to FloatArray (-1.0 to 1.0). Assumes 16kHz mono. */
+    private fun wavToFloatArray(wav: ByteArray): FloatArray {
+        // Skip WAV header (44 bytes for standard 16kHz mono 16-bit)
+        val dataStart = findDataChunk(wav)
+        val pcmData = wav.copyOfRange(dataStart, wav.size)
+        val sampleCount = pcmData.size / 2
+        val floatArray = FloatArray(sampleCount)
+        
+        val buffer = ByteBuffer.wrap(pcmData).order(ByteOrder.LITTLE_ENDIAN)
+        for (i in 0 until sampleCount) {
+            val sample = buffer.getShort()
+            floatArray[i] = sample.toFloat() / 32768.0f
+        }
+        return floatArray
+    }
+
+    private fun findDataChunk(wav: ByteArray): Int {
+        var pos = 12 // Skip RIFF header
+        while (pos + 8 <= wav.size) {
+            val chunkId = String(wav.copyOfRange(pos, pos + 4))
+            val chunkSize = ByteBuffer.wrap(wav, pos + 4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt()
+            if (chunkId == "data") {
+                return pos + 8
+            }
+            pos += 8 + chunkSize
+        }
+        return 44 // Default fallback
     }
 
     companion object {

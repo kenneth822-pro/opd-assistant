@@ -1,5 +1,6 @@
 package np.opd.assistant.ai
 
+import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -60,8 +61,7 @@ class LocalLlmClient(
         return null // Local LLM doesn't do transcription
     }
 
-    override suspend fun generate(system: String?, parts: List<AiPart>, schema: J.Obj?): String {
-        // This is a blocking call, but we don't use coroutines here since it's a stub
+    override suspend fun generate(system: String?, parts: List<AiPart>, schema: J.Obj?): String = withContext(Dispatchers.IO) {
         ensureInitialized()
         
         // STUB: Return a test JSON response

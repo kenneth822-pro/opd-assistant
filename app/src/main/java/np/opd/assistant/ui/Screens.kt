@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import np.opd.assistant.ClinicalPersona
 import np.opd.assistant.Mode
 import np.opd.assistant.RxText
 import np.opd.assistant.Screen
@@ -156,9 +159,10 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
 private fun SetupScreen(st: UiState, vm: SessionViewModel) {
     val context = LocalContext.current
     var mode by remember { mutableStateOf(Mode.LIVE) }
+    var persona by remember { mutableStateOf(vm.settings.persona) }
     var age by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf<Gender?>(null) }
-    val start = { vm.startConsult(mode, age.toIntOrNull()?.takeIf { it in 0..120 }, gender) }
+    val start = { vm.startConsult(mode, age.toIntOrNull()?.takeIf { it in 0..120 }, gender, persona) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) start() else vm.showMessage("Microphone permission is needed to record the consultation.")
     }
@@ -167,6 +171,19 @@ private fun SetupScreen(st: UiState, vm: SessionViewModel) {
         SectionCard("Mode") {
             ModeOption("Live assist", "Live transcript, what to ask next, red flags to rule out and the likely prescription while you talk.", mode == Mode.LIVE) { mode = Mode.LIVE }
             ModeOption("Scribe only", "Live transcript only. The note and suggestions are produced when you end the consultation (fewer requests).", mode == Mode.SCRIBE) { mode = Mode.SCRIBE }
+            ModeOption("Classification / Triage", "Fast classification: condition code, severity and red flags with a disposition — no verbose note while you talk.", mode == Mode.TRIAGE) { mode = Mode.TRIAGE }
+            ModeOption("Direct dictation", "The doctor dictates findings and the prescription. Focus on formulary matching and drug-safety checks.", mode == Mode.DICTATION) { mode = Mode.DICTATION }
+        }
+        SectionCard("Clinical focus") {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ClinicalPersona.entries.forEach { p ->
+                    Choice(p.label, persona == p) { persona = p }
+                }
+            }
+            Muted(persona.promptHint)
         }
         SectionCard("Patient (optional)") {
             OutlinedTextField(
@@ -226,6 +243,7 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
     var showDemo by remember { mutableStateOf(false) }
     var showTranscript by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
+    var editingNote by remember { mutableStateOf(false) }
     BackHandler { vm.go(Screen.HOME) }
 
     reasonFor?.let { (title, action) ->
@@ -329,13 +347,27 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
                 if (n.localDraft) "Note (built on the phone — AI note unavailable)" else "Note (AI draft — check it)",
                 container = if (n.localDraft) Palette.greyBg else Color.Unspecified
             ) {
-                LabelValue("Chief complaint", n.chiefComplaint)
-                LabelValue("History", n.history)
-                LabelValue("Examination", n.examSpoken)
-                LabelValue("Assessment", n.assessment)
-                if (n.planSpoken.isNotBlank()) LabelValue(if (n.localDraft) "Plan" else "Plan (as spoken)", n.planSpoken)
-                if (n.adviceSpoken.isNotBlank()) LabelValue("Advice (as spoken)", n.adviceSpoken)
-                if (n.followUp.isNotBlank()) LabelValue("Follow-up", n.followUp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (editingNote) "Editing — corrections go into the shared slip" else "Tap Edit to correct any misheard word.", fontSize = 12.sp, color = Palette.greyFg, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { editingNote = !editingNote }) { Text(if (editingNote) "Done" else "Edit") }
+                }
+                if (editingNote) {
+                    NoteField("Chief complaint", n.chiefComplaint) { vm.updateSoap(n.copy(chiefComplaint = it)) }
+                    NoteField("History", n.history) { vm.updateSoap(n.copy(history = it)) }
+                    NoteField("Examination", n.examSpoken) { vm.updateSoap(n.copy(examSpoken = it)) }
+                    NoteField("Assessment", n.assessment) { vm.updateSoap(n.copy(assessment = it)) }
+                    NoteField(if (n.localDraft) "Plan" else "Plan (as spoken)", n.planSpoken) { vm.updateSoap(n.copy(planSpoken = it)) }
+                    NoteField("Advice (as spoken)", n.adviceSpoken) { vm.updateSoap(n.copy(adviceSpoken = it)) }
+                    NoteField("Follow-up", n.followUp) { vm.updateSoap(n.copy(followUp = it)) }
+                } else {
+                    LabelValue("Chief complaint", n.chiefComplaint)
+                    LabelValue("History", n.history)
+                    LabelValue("Examination", n.examSpoken)
+                    LabelValue("Assessment", n.assessment)
+                    if (n.planSpoken.isNotBlank()) LabelValue(if (n.localDraft) "Plan" else "Plan (as spoken)", n.planSpoken)
+                    if (n.adviceSpoken.isNotBlank()) LabelValue("Advice (as spoken)", n.adviceSpoken)
+                    if (n.followUp.isNotBlank()) LabelValue("Follow-up", n.followUp)
+                }
             }
         }
 
@@ -377,6 +409,16 @@ private fun LabelValue(label: String, value: String) {
         Text(label, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         Text(value.ifBlank { "—" })
     }
+}
+
+@Composable
+private fun NoteField(label: String, value: String, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label, fontSize = 12.sp) },
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable

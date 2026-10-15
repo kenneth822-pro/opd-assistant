@@ -283,11 +283,13 @@ class LocalModelManager(private val app: Application) {
             val allFiles = listAllFiles(targetDir)
             Log.i(TAG, "All files after extraction: ${allFiles.joinToString(", ")}")
 
+            // Flatten any extracted subdirectories into targetDir FIRST, so the prefix
+            // rename below operates on a single flat directory.
+            moveFilesFromSubdir(targetDir)
+
             if (filePrefix.isNotBlank()) {
                 renameFilesWithPrefix(targetDir, filePrefix)
             }
-
-            moveFilesFromSubdir(targetDir)
 
             val allFilesAfter = listAllFiles(targetDir)
             Log.i(TAG, "All files after processing: ${allFilesAfter.joinToString(", ")}")
@@ -299,6 +301,7 @@ class LocalModelManager(private val app: Application) {
 
     private fun renameFilesWithPrefix(dir: File, prefix: String) {
         dir.listFiles()?.forEach { file ->
+            if (file.isDirectory) return@forEach
             if (file.name.startsWith(prefix)) {
                 val newName = file.name.substring(prefix.length)
                 val newFile = File(dir, newName)
@@ -307,9 +310,6 @@ class LocalModelManager(private val app: Application) {
                 } else {
                     Log.w(TAG, "Failed to rename ${file.name}")
                 }
-            }
-            dir.listFiles()?.filter { it.isDirectory }?.forEach { subdir ->
-                renameFilesWithPrefix(subdir, prefix)
             }
         }
     }

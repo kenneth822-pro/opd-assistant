@@ -46,7 +46,7 @@ class SettingsStore(context: Context) {
     /** Server address for a custom OpenAI-compatible server (e.g. http://192.168.1.10:1234/v1). */
     var customBaseUrl: String
         get() = prefs.getString("custom_base_url", "") ?: ""
-        set(value) = prefs.edit().putString("custom_base_url", value.trim()).apply()
+        set(value) = prefs.edit().putString("custom_base_url", normalizeBaseUrl(value)).apply()
 
     fun baseUrlFor(p: Provider): String = when (p) {
         Provider.CUSTOM -> customBaseUrl
@@ -86,6 +86,15 @@ class SettingsStore(context: Context) {
     var disclaimerAccepted: Boolean
         get() = prefs.getBoolean("disclaimer_v1", false)
         set(value) = prefs.edit().putBoolean("disclaimer_v1", value).apply()
+
+    /** Clinical focus used to shape the AI instructions. */
+    var persona: ClinicalPersona
+        get() = try {
+            ClinicalPersona.valueOf(prefs.getString("persona", null) ?: ClinicalPersona.GENERAL_OPD.name)
+        } catch (e: Exception) {
+            ClinicalPersona.GENERAL_OPD
+        }
+        set(value) = prefs.edit().putString("persona", value.name).apply()
 
     private fun readModel(key: String): ModelInfo? = try {
         prefs.getString(key, null)?.let { (J.parse(it) as? J.Obj)?.let(ModelInfo::fromJ) }
@@ -132,5 +141,21 @@ class SettingsStore(context: Context) {
 
     companion object {
         private const val ALIAS = "opd_settings_key"
+
+        /**
+         * Normalizes a user-entered local/LAN server address so it works without trial and error:
+         *  - "127.0.0.1:8080"      -> "http://127.0.0.1:8080/v1"
+         *  - "192.168.1.20:11434"  -> "http://192.168.1.20:11434/v1"
+         *  - "localhost:1234/v1"   -> "http://localhost:1234/v1"
+         * An empty string stays empty; an explicit scheme (http/https) is preserved.
+         */
+        fun normalizeBaseUrl(raw: String): String {
+            var u = raw.trim()
+            if (u.isEmpty()) return ""
+            if (!u.startsWith("http://", true) && !u.startsWith("https://", true)) u = "http://$u"
+            u = u.trimEnd('/')
+            if (!u.endsWith("/v1")) u += "/v1"
+            return u
+        }
     }
 }

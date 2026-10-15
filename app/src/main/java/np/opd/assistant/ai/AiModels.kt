@@ -223,41 +223,52 @@ object ModelDirectory {
             }
         }
         
-        // Bundled Whisper tiny.en (if present in assets)
+        // Bundled Whisper tiny.en (if present in assets): copy to internal storage on first run
+        // so LocalModelManager.getModelDir() and the recognizer can find it on disk.
         try {
-            val assets = context.assets.list("sherpa-onnx-whisper-tiny.en") ?: emptyArray()
+            val assetName = "sherpa-onnx-whisper-tiny.en"
+            val assets = context.assets.list(assetName) ?: emptyArray()
             if (assets.isNotEmpty()) {
-                out += ModelInfo(
-                    provider = Provider.LOCAL_WHISPER,
-                    id = "sherpa-onnx-whisper-tiny.en",
-                    name = "Whisper Tiny.en (Bundled, Local)",
-                    audioInput = true,
-                    free = true,
-                    structuredOutput = false,
-                    jsonMode = false,
-                    transcriptionApi = true,
-                    contextLength = null
-                )
+                val bundledDir = File(sttDir, assetName)
+                val complete = File(bundledDir, "encoder.int8.onnx").exists() &&
+                    File(bundledDir, "decoder.int8.onnx").exists() &&
+                    File(bundledDir, "tokens.txt").exists()
+                if (!complete) LocalWhisperClient.copyBundledModel(context, assetName, bundledDir)
+                if (!out.any { it.id == assetName }) {
+                    out += ModelInfo(
+                        provider = Provider.LOCAL_WHISPER,
+                        id = assetName,
+                        name = "Whisper Tiny.en (Bundled, Local)",
+                        audioInput = true,
+                        free = true,
+                        structuredOutput = false,
+                        jsonMode = false,
+                        transcriptionApi = true,
+                        contextLength = null
+                    )
+                }
             }
         } catch (e: Exception) {
             // Asset not bundled
         }
 
-        // Local LLM models (ExecuTorch .pte files)
+        // Local LLM models (ExecuTorch): each model lives in its own subdirectory
+        // files/models/llm/<modelId>/{*.pte, tokenizer.model}.
         val llmDir = File(modelsDir, "llm")
         if (llmDir.exists()) {
-            llmDir.listFiles()?.filter { it.extension == "pte" }?.forEach { file ->
-                val modelName = file.nameWithoutExtension
-                out += ModelInfo(
-                    provider = Provider.LOCAL_LLM,
-                    id = modelName,
-                    name = "LLM $modelName (Local)",
-                    audioInput = false,
-                    free = true,
-                    structuredOutput = true,
-                    jsonMode = true,
-                    contextLength = 4096
-                )
+            llmDir.listFiles()?.filter { it.isDirectory }?.forEach { subDir ->
+                if (LocalLlmClient.isValidModelDir(subDir)) {
+                    out += ModelInfo(
+                        provider = Provider.LOCAL_LLM,
+                        id = subDir.name,
+                        name = "LLM ${subDir.name} (Local)",
+                        audioInput = false,
+                        free = true,
+                        structuredOutput = true,
+                        jsonMode = true,
+                        contextLength = 4096
+                    )
+                }
             }
         }
 

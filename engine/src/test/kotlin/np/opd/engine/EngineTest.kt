@@ -103,6 +103,39 @@ class EngineTest {
         assertTrue(Prompts.finalSystemPrompt(c).contains("COMPLETE machine transcript"))
     }
 
+    @Test
+    fun triageAndDictationPromptsCarrySchemaAndCatalogue() {
+        val triage = Prompts.triageSystemPrompt(c)
+        assertTrue(triage.contains("rapid triage"))
+        assertTrue(triage.contains("condition_code"))
+        // The generated schema/reference must still be embedded so codes cannot drift.
+        for (cond in c.conditions.values) assertTrue(cond.code, triage.contains(cond.code))
+
+        val dictation = Prompts.dictationSystemPrompt(c)
+        assertTrue(dictation.contains("prescribing scribe"))
+        assertTrue(dictation.contains("dictated_items"))
+        assertTrue(dictation.contains("dictation_cue"))
+
+        // Both must still expose the same JSON schema the app parses.
+        assertTrue(Prompts.liveSchema(c).toJson().contains("COND_OTHER"))
+        assertTrue(Prompts.finalSchema(c).toJson().contains("case_delta"))
+    }
+
+    @Test
+    fun personaHintIsInjectedIntoPrompts() {
+        val hint = "Focus on acute abdomen, trauma, wound/infection red flags, and surgical referral criteria"
+        val live = Prompts.liveSystemPrompt(c, personaHint = hint)
+        val final = Prompts.finalSystemPrompt(c, personaHint = hint)
+        val triage = Prompts.triageSystemPrompt(c, personaHint = hint)
+        assertTrue(live.contains("SETTING: $hint"))
+        assertTrue(final.contains("SETTING: $hint"))
+        assertTrue(triage.contains("SETTING: $hint"))
+
+        // A blank persona must not leave a stray "SETTING:" line.
+        assertFalse(Prompts.liveSystemPrompt(c, personaHint = "").contains("SETTING:"))
+        assertFalse(Prompts.finalSystemPrompt(c, personaHint = "").contains("SETTING:"))
+    }
+
     /* ---------------- on-device hints (LocalAssist) ---------------- */
 
     private fun line(speaker: String, text: String) = TranscriptLine(speaker, text, 0)

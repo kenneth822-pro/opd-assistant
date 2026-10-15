@@ -65,7 +65,12 @@ internal fun RecordingScreen(st: UiState, vm: SessionViewModel) {
     if (showDemo) DemographicsDialog(st.case.demographics, onSave = { a, g -> vm.act(DoctorAction.SetDemographics(a, g)); showDemo = false }, onDismiss = { showDemo = false })
 
     Page(
-        title = if (st.mode == Mode.LIVE) "Live assist" else "Scribe",
+        title = when (st.mode) {
+            Mode.LIVE -> "Live assist"
+            Mode.SCRIBE -> "Scribe"
+            Mode.TRIAGE -> "Triage"
+            Mode.DICTATION -> "Dictation"
+        },
         bottomBar = {
             if (st.busy == null) Surface(tonalElevation = 3.dp) {
                 Row(
@@ -74,7 +79,7 @@ internal fun RecordingScreen(st: UiState, vm: SessionViewModel) {
                 ) {
                     if (st.paused) Button(onClick = { vm.resume() }, modifier = Modifier.weight(1f)) { Text("▶ Resume") }
                     else OutlinedButton(onClick = { vm.pause() }, modifier = Modifier.weight(1f)) { Text("⏸ Pause") }
-                    if (st.mode == Mode.LIVE) OutlinedButton(onClick = { vm.suggestNow() }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) {
+                    if (st.mode != Mode.SCRIBE) OutlinedButton(onClick = { vm.suggestNow() }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp)) {
                         Text("💡 Suggest")
                     }
                     Button(
@@ -97,7 +102,7 @@ internal fun RecordingScreen(st: UiState, vm: SessionViewModel) {
         st.message?.let { Text(it, color = Palette.urgentFg) }
         PatientStrip(st, cat, vm, onEdit = { showDemo = true }, onVitals = { showVitals = true })
 
-        if (st.mode == Mode.LIVE) {
+        if (st.mode != Mode.SCRIBE) {
             if (st.paused) {
                 val catching = st.pendingSegments > 0 || st.analysing
                 SectionCard("Paused", container = Palette.infoBg) {
@@ -153,7 +158,7 @@ private fun StatusHeader(st: UiState) {
         }
     }
     if (st.recording && !st.paused) LinearProgressIndicator(progress = { st.level }, modifier = Modifier.fillMaxWidth().height(6.dp))
-    if (st.mode == Mode.LIVE) {
+    if (st.mode != Mode.SCRIBE) {
         if (st.analysing) Text("💡 Updating suggestions…", color = Palette.infoFg, fontSize = 13.sp)
         else st.analysisNote?.let { Text(it, color = if (st.analysisFailed) Palette.urgentFg else Palette.greyFg, fontSize = 12.sp) }
     }

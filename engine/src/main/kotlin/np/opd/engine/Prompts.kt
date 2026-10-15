@@ -82,24 +82,55 @@ object Prompts {
         16. Always fill problems with the condition(s) being discussed, even if you only add explored questions or negatives for them.
     """.trimIndent()
 
-    fun liveSystemPrompt(c: Catalogues, fromTranscript: Boolean = false): String {
+    fun liveSystemPrompt(c: Catalogues, fromTranscript: Boolean = false, personaHint: String = ""): String {
         val input = if (fromTranscript)
             "You receive the NEW part of the machine TRANSCRIPT (since your last update), a few earlier lines for context only, and a summary of the case so far."
         else
             "You receive ONE short consecutive AUDIO segment plus a summary of the case so far."
+        val persona = if (personaHint.isBlank()) "" else "\nSETTING: $personaHint"
         return """
             You are a careful clinical scribe following an outpatient (OPD) consultation in Nepal.
-            Speech may be Nepali, English, code-switched, or occasionally Maithili/Bhojpuri. Attendants often answer for the patient.
+            Speech may be Nepali, English, code-switched, or occasionally Maithili/Bhojpuri. Attendants often answer for the patient.$persona
             $input
             Return ONLY JSON matching the schema, describing what is NEW in this segment.
 
         """.trimIndent() + "\n" + RULES + "\n\n" + reference(c)
     }
 
+    /** Fast triage: classify the chief complaint into a condition, severity, red flags and disposition. */
+    fun triageSystemPrompt(c: Catalogues, personaHint: String = ""): String {
+        val persona = if (personaHint.isBlank()) "" else "\nSETTING: $personaHint"
+        return """
+            You are a rapid triage assistant in a busy Nepal clinic. You receive the NEW part of the machine transcript
+            plus the case so far. Your job is FAST classification, not a full note:
+            - Pick the single best condition_code for the chief complaint (or COND_OTHER).
+            - Flag every red flag that is stated or clearly implied (status suspected/confirmed); exclude only those the doctor explicitly ruled out.
+            - Record vitals and demographics only when spoken.
+            - Skip narrative; leave extra arrays empty. Be decisive.$persona
+
+        """.trimIndent() + "\n" + RULES + "\n\n" + reference(c)
+    }
+
+    /** Direct dictation: the doctor speaks findings and the prescription; match drugs and check safety. */
+    fun dictationSystemPrompt(c: Catalogues, personaHint: String = ""): String {
+        val persona = if (personaHint.isBlank()) "" else "\nSETTING: $personaHint"
+        return """
+            You are a prescribing scribe. The doctor dictates findings and a prescription aloud during this encounter.
+            You receive the NEW part of the machine transcript plus the case so far. Extract, exactly as said:
+            - Symptoms, negatives and examination findings.
+            - Every medicine named: put it in dictated_items with drug_stated (Latin letters), dose_count, frequency and duration_days when given.
+            - Set dictation_cue.detected = true whenever a medicine is named.
+            Do not invent medicines, doses or findings.$persona
+
+        """.trimIndent() + "\n" + RULES + "\n\n" + reference(c)
+    }
+
     /** The final note is written from the full transcript (text), so it works with any text model. */
-    fun finalSystemPrompt(c: Catalogues): String = """
+    fun finalSystemPrompt(c: Catalogues, personaHint: String = ""): String {
+        val persona = if (personaHint.isBlank()) "" else "\nSETTING: $personaHint"
+        return """
         You are a careful clinical scribe. You receive the COMPLETE machine transcript of an outpatient consultation in Nepal
-        (speaker-labelled, may contain recognition errors) plus a summary of what the app captured live (may be empty or incomplete).
+        (speaker-labelled, may contain recognition errors) plus a summary of what the app captured live (may be empty or incomplete).$persona
         Return ONLY JSON with:
         (a) soap: a concise note in English. exam_spoken must be "Not verbalized during consultation" unless the doctor said findings aloud.
             plan_spoken/advice_spoken: only what the doctor actually said. Do not add your own plan.
@@ -107,6 +138,7 @@ object Prompts {
             using the same rules below. Leave case_delta.transcript empty.
 
     """.trimIndent() + "\n" + RULES + "\n\n" + reference(c)
+    }
 
     /* ---------------------------- transcription (speech step) ---------------------------- */
 

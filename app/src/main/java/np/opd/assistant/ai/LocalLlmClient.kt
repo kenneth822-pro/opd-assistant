@@ -1,20 +1,22 @@
 package np.opd.assistant.ai
 
-import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import np.opd.engine.J
-import np.opd.engine.Prompts
 import java.io.File
 
 /**
  * Local LLM using ExecuTorch (LlmModule).
  * Runs entirely on-device for note generation and live suggestions.
- * 
- * NOTE: This uses a stub implementation that compiles. The actual ExecuTorch integration
- * requires proper API usage which varies by version. Replace with real implementation
- * when testing on device with known library version.
+ *
+ * The LlmModule holds a 1.1-2.4 GB parameter buffer, so it is cached process-wide and keyed by
+ * model path: SessionViewModel creates a new client per call, and reloading the .pte every time
+ * would exhaust memory. Only one local LLM is kept resident at a time. The native library ships
+ * only for arm64-v8a and x86_64; a load failure is surfaced as a transient error so the caller
+ * falls back to a backup model or the on-phone draft.
  */
 class LocalLlmClient(
     private val modelFile: File,
@@ -22,12 +24,11 @@ class LocalLlmClient(
 ) : AiClient {
 
     private val TAG = "LocalLlmClient"
-    private var initialized = false
 
     override val model: ModelInfo = ModelInfo(
         provider = Provider.LOCAL_LLM,
-        id = modelFile.nameWithoutExtension,
-        name = "LLM ${modelFile.nameWithoutExtension} (Local)",
+        id = modelFile.parentFile?.name ?: modelFile.nameWithoutExtension,
+        name = "LLM ${modelFile.parentFile?.name ?: modelFile.nameWithoutExtension} (Local)",
         audioInput = false,
         free = true,
         structuredOutput = true,
@@ -35,49 +36,96 @@ class LocalLlmClient(
         contextLength = 4096
     )
 
-    /** Initializes the ExecuTorch LlmModule. */
-    private fun ensureInitialized() {
-        if (initialized) return
-        try {
-            // TODO: Initialize ExecuTorch LlmModule here
-            // This requires the actual ExecuTorch Kotlin API which varies by version
-            // Example structure:
-            // val config = LlmModuleConfig()
-            //     .modulePath(modelFile.absolutePath)
-            //     .tokenizerPath(tokenizerFile.absolutePath)
-            //     .temperature(0.1f)
-            //     .build()
-            // module = LlmModule(config)
-            
-            initialized = true
-            Log.i(TAG, "Initialized ExecuTorch LLM from ${modelFile.name} (STUB - replace with real implementation)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize local LLM", e)
-            throw ApiException("Failed to initialize local LLM: ${e.message}")
-        }
-    }
+    override suspend fun transcribe(wav: ByteArray, context: String): List<np.opd.engine.TranscriptLine>? = null
 
-    override suspend fun transcribe(wav: ByteArray, context: String): List<np.opd.engine.TranscriptLine>? {
-        return null // Local LLM doesn't do transcription
-    }
+    override suspend fun generate(system: String?, parts: List<AiPart>, schema: J.Obj?): String =
+        withContext(Dispatchers.IO) {
+            val prompt = buildLlamaPrompt(system, parts)
+            val module = getOrCreateModule(modelFile, tokenizerFile)
+            // ExecuTorch LlmModule is not thread-safe: serialize generate() calls so a
+            // suggestNow()/retryFailed() run can never touch the native pointer concurrently.
+            inferenceMutex.withLock {
+                try {
+                    val sb = StringBuilder()
+                    val callback = object : org.pytorch.executorch.extension.llm.LlmCallback {
+                        override fun onResult(result: String?) {
+                            if (result != null) sb.append(result)
+                        }
 
-    override suspend fun generate(system: String?, parts: List<AiPart>, schema: J.Obj?): String {
-        // This is a blocking call, but we don't use coroutines here since it's a stub
-        ensureInitialized()
-        
-        // STUB: Return a test JSON response
-        // Real implementation would use ExecuTorch LlmModule
-        Log.i(TAG, "generate() called (STUB) - returning test JSON")
-        
-        // Return a minimal valid JSON for testing
-        if (schema != null) {
-            // Try to construct a minimal valid response based on schema
-            return "{}"
+                        override fun onStats(stats: String?) {
+                            // Optional progress/telemetry: ignored.
+                        }
+                    }
+                    module.generate(prompt, MAX_NEW_TOKENS, callback)
+                    val out = sb.toString()
+                    if (out.isBlank()) {
+                        throw ApiException("Local LLM returned an empty answer (${model.id}).", transient = true)
+                    }
+                    out
+                } catch (e: UnsatisfiedLinkError) {
+                    throw ApiException("ExecuTorch native error: ${e.message}", transient = true)
+                } catch (e: ApiException) {
+                    throw e
+                } catch (e: Exception) {
+                    throw ApiException("ExecuTorch native error: ${e.message}", transient = true)
+                }
+            }
         }
-        return "{}"
-    }
 
     companion object {
+        private const val MAX_NEW_TOKENS = 512
+
+        /** Serializes all native generate() calls across LocalLlmClient instances. */
+        private val inferenceMutex = Mutex()
+
+        /** The single loaded LlmModule, together with the path it was loaded from. */
+        @Volatile private var loadedPath: String? = null
+        @Volatile private var module: org.pytorch.executorch.extension.llm.LlmModule? = null
+        private val lock = Any()
+
+        private fun getOrCreateModule(modelFile: File, tokenizerFile: File): org.pytorch.executorch.extension.llm.LlmModule {
+            val path = modelFile.absolutePath
+            synchronized(lock) {
+                if (loadedPath == path) module?.let { return it }
+                // A different model is requested: free the previous one before loading the new one.
+                module?.let {
+                    try { it.resetNative() } catch (e: Exception) { Log.w("LocalLlmClient", "resetNative() failed: ${e.message}") }
+                }
+                module = null
+                loadedPath = null
+                try {
+                    val created = org.pytorch.executorch.extension.llm.LlmModule(path, tokenizerFile.absolutePath, 0.1f)
+                    module = created
+                    loadedPath = path
+                    return created
+                } catch (e: UnsatisfiedLinkError) {
+                    throw ApiException("ExecuTorch native error: ${e.message}", transient = true)
+                } catch (e: Exception) {
+                    throw ApiException("Failed to load local LLM ${modelFile.name}: ${e.message}", transient = true)
+                }
+            }
+        }
+
+        /** Builds a Llama-3.2 Instruct prompt from the system instruction and message parts. */
+        fun buildLlamaPrompt(system: String?, parts: List<AiPart>): String {
+            val user = parts.joinToString("\n") { p ->
+                when (p) {
+                    is AiPart.Text -> p.text
+                    is AiPart.Wav -> "[audio not supported by the local text model]"
+                }
+            }
+            return buildString {
+                append("<|begin_of_text|>")
+                append("<|start_header_id|>system<|end_header_id|>\n\n")
+                append(system ?: "You are a careful clinical scribe.")
+                append("<|eot_id|>")
+                append("<|start_header_id|>user<|end_header_id|>\n\n")
+                append(user)
+                append("<|eot_id|>")
+                append("<|start_header_id|>assistant<|end_header_id|>\n\n")
+            }
+        }
+
         /** Checks if model files exist and are valid. */
         fun isValidModelDir(dir: File): Boolean {
             return dir.isDirectory &&

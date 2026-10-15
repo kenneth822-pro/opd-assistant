@@ -94,7 +94,7 @@ object AvailableLlmModels {
         "llama-3.2-1b-instruct-spinquant" to ModelDef(
             id = "llama-3.2-1b-instruct-spinquant",
             name = "Llama 3.2 1B Instruct (SpinQuant 4-bit, ~1.1 GB)",
-            url = "https://huggingface.co/pytorch-executorch/llama-3.2-1b-instruct/resolve/main/llama-3.2-1b-instruct-spinquant.pte",
+            url = "https://huggingface.co/pytorch-executorch/llama-3.2-1b-instruct/resolve/main",
             sizeBytes = 1_100_000_000L,
             files = listOf("llama-3.2-1b-instruct-spinquant.pte", "tokenizer.model"),
             type = ModelType.LLM,
@@ -103,7 +103,7 @@ object AvailableLlmModels {
         "llama-3.2-3b-instruct-spinquant" to ModelDef(
             id = "llama-3.2-3b-instruct-spinquant",
             name = "Llama 3.2 3B Instruct (SpinQuant 4-bit, ~2.4 GB)",
-            url = "https://huggingface.co/pytorch-executorch/llama-3.2-3b-instruct/resolve/main/llama-3.2-3b-instruct-spinquant.pte",
+            url = "https://huggingface.co/pytorch-executorch/llama-3.2-3b-instruct/resolve/main",
             sizeBytes = 2_400_000_000L,
             files = listOf("llama-3.2-3b-instruct-spinquant.pte", "tokenizer.model"),
             type = ModelType.LLM,

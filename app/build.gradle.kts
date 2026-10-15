@@ -6,6 +6,25 @@ plugins {
 
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
+// On aarch64 hosts (e.g. building the APK directly on an ARM64 Android device/Termux/Alpine)
+// Google's x86_64 aapt2 cannot run. If a native arm64 aapt2 is installed and the property has
+// not been set on the command line, point AGP at it. On x86_64 CI runners this is a no-op.
+val osArch = System.getProperty("os.arch") ?: ""
+if (osArch in listOf("aarch64", "arm64") && !project.hasProperty("android.aapt2FromMavenOverride")) {
+    val candidates = listOf(
+        System.getenv("PREFIX")?.let { "$it/bin/aapt2" },
+        "/usr/bin/aapt2",
+        "/usr/local/bin/aapt2"
+    ).filterNotNull()
+    val nativeAapt2 = candidates.firstOrNull { file(it).exists() }
+    if (nativeAapt2 != null) {
+        logger.lifecycle("aarch64 host: using native aapt2 at $nativeAapt2")
+        project.extensions.extraProperties["android.aapt2FromMavenOverride"] = nativeAapt2
+    } else {
+        logger.lifecycle("aarch64 host: no native aapt2 found (install one or pass -Pandroid.aapt2FromMavenOverride=/path/to/aapt2)")
+    }
+}
+
 android {
     namespace = "np.opd.assistant"
     compileSdk = 35

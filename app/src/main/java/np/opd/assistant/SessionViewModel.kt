@@ -46,7 +46,15 @@ import java.nio.ByteOrder
 import java.util.concurrent.ConcurrentHashMap
 
 enum class Screen { DISCLAIMER, HOME, SETTINGS, SETUP, RECORDING, REVIEW }
-enum class Mode { LIVE, SCRIBE }
+enum class Mode { LIVE, SCRIBE, TRIAGE, DICTATION }
+
+/** Clinical focus that shapes the AI instructions for the chosen setting. */
+enum class ClinicalPersona(val label: String, val promptHint: String) {
+    GENERAL_OPD("General OPD", "Standard Nepal adult/pediatric outpatient clinic"),
+    EMERGENCY_TRIAGE("Rapid Triage / ER", "Prioritize red flags, vitals, and immediate disposition"),
+    SURGICAL_OPD("Surgical / Acute Care", "Focus on acute abdomen, trauma, wound/infection red flags, and surgical referral criteria")
+}
+
 enum class SegState { QUEUED, TRANSCRIBING, DONE, SILENT, FAILED }
 
 data class SegmentStatus(
@@ -119,6 +127,8 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     private var finalSchema: J.Obj? = null
     private val transcribePrompt = Prompts.transcriptionSystemPrompt()
     private val transcribeSchema = Prompts.transcriptionSchema()
+    /** Notes/analysis prompt, rebuilt per consultation for the chosen mode + persona. */
+    private var analysisPrompt = ""
 
     private class Segment(
         val file: File,
@@ -148,6 +158,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     private val keyCache = ConcurrentHashMap<Provider, String>()
     private var sessionSpeech: ModelInfo? = null
     private var sessionNotes: ModelInfo? = null
+    private var sessionPersona: ClinicalPersona = ClinicalPersona.GENERAL_OPD
 
     init {
         var cat: Catalogues? = null
@@ -156,6 +167,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             cat = Catalogues.loadBundled()
             problems = CatalogueIntegrity.check(cat)
             liveTranscriptPrompt = Prompts.liveSystemPrompt(cat, fromTranscript = true)
+            analysisPrompt = liveTranscriptPrompt
             liveSchema = Prompts.liveSchema(cat)
             finalPrompt = Prompts.finalSystemPrompt(cat)
             finalSchema = Prompts.finalSchema(cat)
@@ -394,7 +406,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     /* ---------------- consultation ---------------- */
 
-    fun startConsult(mode: Mode, age: Int?, gender: Gender?) {
+    fun startConsult(mode: Mode, age: Int?, gender: Gender?, persona: ClinicalPersona = settings.persona) {
         val cat = catalogues ?: return showMessage("Clinical catalogues failed to load.")
         val speech = settings.speechModel ?: return showMessage("Choose a speech model in Settings first.")
         if (!speech.audioInput && !speech.transcriptionApi) return showMessage("The speech model must accept audio. Choose another in Settings.")
@@ -407,6 +419,20 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         synchronized(segments) { segments.clear() }
         analyzed.clear()
         lastAnalysisAt = 0L
+
+        // Build the AI instructions for this mode + persona so the scribe behaves appropriately.
+        sessionPersona = persona
+        settings.persona = persona
+        val hint = persona.promptHint
+        liveTranscriptPrompt = Prompts.liveSystemPrompt(cat, fromTranscript = true, personaHint = hint)
+        finalPrompt = Prompts.finalSystemPrompt(cat, personaHint = hint)
+        liveSchema = Prompts.liveSchema(cat)
+        finalSchema = Prompts.finalSchema(cat)
+        analysisPrompt = when (mode) {
+            Mode.TRIAGE -> Prompts.triageSystemPrompt(cat, personaHint = hint)
+            Mode.DICTATION -> Prompts.dictationSystemPrompt(cat, personaHint = hint)
+            else -> liveTranscriptPrompt
+        }
 
         var case = CaseState()
         if (age != null || gender != null) case = Reducer.handle(case, DoctorAction.SetDemographics(age, gender), cat)
@@ -473,7 +499,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun requestAnalysis(immediate: Boolean) {
-        if (_ui.value.mode != Mode.LIVE) return
+        if (_ui.value.mode == Mode.SCRIBE) return
         if (immediate) analyseImmediately = true
         analysisTrigger?.trySend(Unit)
     }
@@ -525,34 +551,43 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         setSeg(seg.number) { it.copy(state = SegState.TRANSCRIBING, error = null) }
+        val notes = sessionNotes ?: settings.analysisModel
+        // One multimodal call can transcribe AND classify when one audio model plays both roles.
+        val fused = _ui.value.mode != Mode.SCRIBE &&
+            speech.audioInput && !speech.transcriptionApi &&
+            notes != null && notes.key == speech.key
         try {
             val wav = withContext(Dispatchers.IO) { seg.file.readBytes() }
             val context = _ui.value.case.transcript.takeLast(6).joinToString("\n") { "${it.speaker}: ${it.text}" }
-            val (result, used) = withFallback(speech, Need.AUDIO, live = true) { client ->
-                val direct = client.transcribe(wav, context)
-                if (direct != null) direct to Prompts.transcriptText(direct)
-                else {
-                    val raw = client.generate(
-                        transcribePrompt,
-                        listOf(
-                            AiPart.Text("Previous lines, for speaker context only (do not repeat them):\n${context.ifBlank { "(start of consultation)" }}\n\nTranscribe audio segment #${seg.number}."),
-                            AiPart.Wav(wav)
-                        ),
-                        transcribeSchema
-                    )
-                    Prompts.parseTranscription(raw) to raw
+            if (fused) {
+                transcribeAndAnalyse(seg, speech, cat, wav)
+            } else {
+                val (result, used) = withFallback(speech, Need.AUDIO, live = true) { client ->
+                    val direct = client.transcribe(wav, context)
+                    if (direct != null) direct to Prompts.transcriptText(direct)
+                    else {
+                        val raw = client.generate(
+                            transcribePrompt,
+                            listOf(
+                                AiPart.Text("Previous lines, for speaker context only (do not repeat them):\n${context.ifBlank { "(start of consultation)" }}\n\nTranscribe audio segment #${seg.number}."),
+                                AiPart.Wav(wav)
+                            ),
+                            transcribeSchema
+                        )
+                        Prompts.parseTranscription(raw) to raw
+                    }
                 }
+                val (lines, raw) = result
+                _ui.update { st ->
+                    st.copy(
+                        case = dictationize(Reducer.reduce(st.case, LiveDelta(transcript = lines), cat, seg.startMs)),
+                        aiLog = (st.aiLog + "Transcript ${seg.number} (${used.id}):\n$raw").takeLast(40)
+                    )
+                }
+                setSeg(seg.number) { it.copy(state = SegState.DONE, model = used.id, lines = lines.size, error = null) }
+                if (lines.isNotEmpty()) refreshHints()
+                if (lines.isNotEmpty() || forceAnalysis) requestAnalysis(false)
             }
-            val (lines, raw) = result
-            _ui.update { st ->
-                st.copy(
-                    case = Reducer.reduce(st.case, LiveDelta(transcript = lines), cat, seg.startMs),
-                    aiLog = (st.aiLog + "Transcript ${seg.number} (${used.id}):\n$raw").takeLast(40)
-                )
-            }
-            setSeg(seg.number) { it.copy(state = SegState.DONE, model = used.id, lines = lines.size, error = null) }
-            if (lines.isNotEmpty()) refreshHints()
-            if (lines.isNotEmpty() || forceAnalysis) requestAnalysis(false)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -560,6 +595,51 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             addError("Segment ${seg.number}: ${e.message}")
             if (forceAnalysis) requestAnalysis(true)
         }
+    }
+
+    /**
+     * Fused live path: the audio model returns the transcript AND the clinical delta in one call,
+     * halving request count and latency vs. transcribe-then-analyse. Requires the same model to
+     * be both the speech and the notes model.
+     */
+    private suspend fun transcribeAndAnalyse(seg: Segment, model: ModelInfo, cat: Catalogues, wav: ByteArray) {
+        val st0 = _ui.value
+        val earlier = st0.case.transcript.filter { it in analyzed }.takeLast(8)
+        val prompt = buildString {
+            append(Prompts.caseSummary(st0.case, cat, recentLines = 0))
+            hintText(st0.hints)?.let { append("\n").append(it).append("\n") }
+            if (earlier.isNotEmpty()) append("\nEARLIER LINES (context only, already processed):\n").append(Prompts.transcriptText(earlier)).append("\n")
+            append("\nNEW AUDIO SEGMENT #${seg.number}. Transcribe it AND report the clinical delta in one JSON object.")
+        }
+        val (result, used) = withFallback(model, Need.AUDIO, live = true) { client ->
+            val raw = client.generate(
+                analysisPrompt,
+                listOf(AiPart.Text(prompt), AiPart.Wav(wav)),
+                liveSchema
+            )
+            Prompts.parseDelta(raw) to raw
+        }
+        val (delta, raw) = result
+        val rawLines = delta.transcript
+        // Reduce first so we can mark the EXACT stored transcript objects as analysed:
+        // the reducer rewrites offsetMs (segmentStartMs + offset), so the raw delta lines
+        // would never compare equal to the stored lines and the dedupe would silently fail.
+        _ui.update { st ->
+            val c = dictationize(Reducer.reduce(st.case, delta, cat, seg.startMs))
+            val added = c.transcript.toSet() - st.case.transcript.toSet()
+            analyzed += added
+            st.copy(
+                case = c,
+                heard = st.heard + heardFields(st.case, c),
+                analysing = false,
+                analysisFailed = false,
+                aiLog = (st.aiLog + "Fused ${seg.number} (${used.id}):\n$raw").takeLast(40)
+            )
+        }
+        setSeg(seg.number) { it.copy(state = SegState.DONE, model = used.id, lines = rawLines.size, error = null) }
+        lastAnalysisAt = System.currentTimeMillis()
+        if (rawLines.isNotEmpty()) refreshHints()
+        _ui.update { it.copy(analysing = false, analysisNote = "Transcribed + classified at ${clock(it.elapsedSec)}") }
     }
 
     /** Keyword hints on the phone; also fills age/sex from the conversation when not entered. */
@@ -588,6 +668,14 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         if (before.demographics.age == null && after.demographics.age != null) add("age")
         if (before.demographics.gender == Gender.UNKNOWN && after.demographics.gender != Gender.UNKNOWN) add("gender")
     }
+
+    /**
+     * In DICTATION mode every problem is treated as being dictated, so the UI focuses on
+     * formulary matching and drug-safety checks for each medicine the doctor names.
+     */
+    private fun dictationize(state: CaseState): CaseState =
+        if (_ui.value.mode != Mode.DICTATION) state
+        else state.copy(problems = state.problems.map { if (it.dictation) it else it.copy(dictation = true) })
 
     private fun hintText(h: LocalAssist.Hints): String? {
         val parts = mutableListOf<String>()
@@ -620,14 +708,14 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(analysing = true) }
         try {
             val (result, used) = withFallback(model, Need.TEXT, live = true) { client ->
-                val raw = client.generate(liveTranscriptPrompt, listOf(AiPart.Text(prompt)), liveSchema)
+                val raw = client.generate(analysisPrompt, listOf(AiPart.Text(prompt)), liveSchema)
                 Prompts.parseDelta(raw) to raw
             }
             val (delta, raw) = result
             analyzed += fresh
             lastAnalysisAt = System.currentTimeMillis()
             _ui.update { s ->
-                val c = Reducer.reduce(s.case, delta.copy(transcript = emptyList()), cat)
+                val c = dictationize(Reducer.reduce(s.case, delta.copy(transcript = emptyList()), cat))
                 s.copy(
                     case = c,
                     heard = s.heard + heardFields(s.case, c),
@@ -762,6 +850,9 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun markTipDone(key: String) = _ui.update { it.copy(doneTips = it.doneTips + key) }
+
+    /** Lets the doctor correct the SOAP note before sharing the slip. */
+    fun updateSoap(soap: Prompts.SoapNote) = _ui.update { it.copy(soap = soap) }
 
     fun newConsultation() {
         if (_ui.value.recording) return

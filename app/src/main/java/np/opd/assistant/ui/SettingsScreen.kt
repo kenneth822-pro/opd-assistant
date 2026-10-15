@@ -225,7 +225,7 @@ internal fun LocalModelsSection(vm: SessionViewModel) {
         // Global download progress
         if (downloadProgress.active != null) {
             SectionCard("Downloading ${downloadProgress.active}") {
-                LinearProgressIndicator(progress = downloadProgress.progress, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(progress = { downloadProgress.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
                 Text(downloadProgress.status, fontSize = 12.sp, color = Palette.greyFg)
                 if (downloadProgress.progress > 0f && downloadProgress.progress < 1f) {
                     TextButton(onClick = { 
@@ -287,7 +287,7 @@ private fun LocalModelsList(
                     Text("${def.language} · ${formatSize(def.sizeBytes)}", fontSize = 11.sp, color = Palette.greyFg)
                 }
                 if (isDownloading) {
-                    LinearProgressIndicator(progress = downloadProgress.progress, modifier = Modifier.width(100.dp))
+                    LinearProgressIndicator(progress = { downloadProgress.progress.coerceIn(0f, 1f) }, modifier = Modifier.width(100.dp))
                 } else {
                     Button(onClick = { onDownload(def.id) }) { Text("Download") }
                 }

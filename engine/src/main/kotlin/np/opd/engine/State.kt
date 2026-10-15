@@ -147,6 +147,10 @@ data class CaseState(
     val audit: List<String> = emptyList()
 ) {
     fun problem(id: String): Problem? = problems.firstOrNull { it.problemId == id }
+
+    companion object {
+        fun fromJ(o: J.Obj): CaseState = caseStateFromJ(o)
+    }
 }
 
 /* ---------------- AI input (one audio segment) ---------------- */

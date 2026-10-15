@@ -19,6 +19,10 @@ object Prompts {
         val localDraft: Boolean = false
     ) {
         fun isBlank(): Boolean = listOf(chiefComplaint, history, assessment, planSpoken).all { it.isBlank() }
+
+        companion object {
+            fun fromJ(o: J.Obj): SoapNote = soapNoteFromJ(o)
+        }
     }
 
     data class FinalResult(val soap: SoapNote, val delta: LiveDelta)

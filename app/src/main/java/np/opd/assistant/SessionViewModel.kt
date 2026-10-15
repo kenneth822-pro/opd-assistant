@@ -27,6 +27,7 @@ import np.opd.assistant.ai.ModelInfo
 import np.opd.assistant.ai.OpenAiCompatClient
 import np.opd.assistant.ai.Provider
 import np.opd.assistant.model.LocalModelManager
+import np.opd.assistant.audio.RecordingService
 import np.opd.assistant.audio.WavSegmentRecorder
 import np.opd.engine.CaseState
 import np.opd.engine.CatalogueIntegrity
@@ -40,6 +41,7 @@ import np.opd.engine.Notes
 import np.opd.engine.Prompts
 import np.opd.engine.Reducer
 import np.opd.engine.TranscriptLine
+import np.opd.engine.toJ
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -176,7 +178,24 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         }
         catalogues = cat
         catalogueProblems = problems
-        _ui = MutableStateFlow(withSettings(UiState(screen = if (settings.disclaimerAccepted) Screen.HOME else Screen.DISCLAIMER)))
+        // Restore the last consultation snapshot (if any) so "Open last consultation" survives
+        // a process kill or phone restart mid-consultation.
+        val restored = loadSessionSnapshot()
+        val startScreen = when {
+            !settings.disclaimerAccepted -> Screen.DISCLAIMER
+            else -> Screen.HOME
+        }
+        _ui = MutableStateFlow(
+            withSettings(
+                UiState(
+                    screen = startScreen,
+                    case = restored?.first ?: CaseState(),
+                    soap = restored?.second,
+                    mode = restored?.third ?: Mode.LIVE,
+                    hasSession = restored != null && restored.first.tick > 0
+                )
+            )
+        )
         ui = _ui.asStateFlow()
     }
 
@@ -192,6 +211,47 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     private fun refreshSettings() = _ui.update { withSettings(it) }
+
+    /* ---------------- crash-safe persistence ---------------- */
+
+    private fun sessionFile(): File = File(getApplication<Application>().filesDir, "last_session.json")
+
+    /** Writes the current case + note + mode to disk (best-effort; never throws into the UI). */
+    private fun saveSessionSnapshot() {
+        val st = _ui.value
+        if (!st.hasSession) return
+        val json = J.obj(
+            "mode" to st.mode.name,
+            "case" to st.case.toJ(),
+            "soap" to st.soap?.toJ()
+        ).toJson()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                sessionFile().writeText(json)
+            } catch (e: Exception) {
+                // Persistence is a convenience; a write failure must not affect the consultation.
+            }
+        }
+    }
+
+    /** Loads (case, soap, mode) from the last snapshot, or null if there is none / it is unreadable. */
+    private fun loadSessionSnapshot(): Triple<CaseState, Prompts.SoapNote?, Mode>? = try {
+        val f = sessionFile()
+        if (!f.exists()) null else {
+            val root = J.parse(f.readText()) as? J.Obj
+            val caseObj: J.Obj? = root?.obj("case")
+            val case: CaseState? = caseObj?.let { o -> CaseState.fromJ(o) }
+            if (root == null || case == null || case.tick <= 0) null
+            else {
+                val soapObj: J.Obj? = root.obj("soap")
+                val soap: Prompts.SoapNote? = soapObj?.let { o -> Prompts.SoapNote.fromJ(o) }
+                val mode = root.str("mode")?.let { m -> Mode.entries.firstOrNull { it.name == m } } ?: Mode.LIVE
+                Triple(case, soap, mode)
+            }
+        }
+    } catch (e: Exception) {
+        null
+    }
 
     /* ---------------- navigation ---------------- */
 
@@ -326,6 +386,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteAllAudio() {
         if (_ui.value.recording) return
         File(getApplication<Application>().filesDir, "sessions").deleteRecursively()
+        try { sessionFile().delete() } catch (e: Exception) { /* nothing to delete */ }
         synchronized(segments) { segments.clear() }
         showMessage("All recorded audio deleted from this phone.")
     }
@@ -446,6 +507,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         recorder = rec
         sessionSpeech = speech
         sessionNotes = notes
+        RecordingService.start(getApplication())
         _ui.value = withSettings(UiState(screen = Screen.RECORDING, mode = mode, case = case, recording = true, hasSession = true))
         startWorkers()
         startTicker()
@@ -523,6 +585,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(paused = true, analysisNote = "Paused — catching up with what was said…") }
         analyseImmediately = true
         forceAnalysis = true
+        RecordingService.stop(getApplication())
         viewModelScope.launch {
             withContext(Dispatchers.IO) { recorder?.stop() } // emits the last part as a segment
             if (_ui.value.pendingSegments == 0) requestAnalysis(true)
@@ -533,6 +596,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         if (!_ui.value.recording || !_ui.value.paused) return
         try {
             recorder?.start()
+            RecordingService.start(getApplication())
             _ui.update { it.copy(paused = false) }
         } catch (e: Exception) {
             showMessage("Could not restart the microphone: ${e.message}")
@@ -585,6 +649,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
                 setSeg(seg.number) { it.copy(state = SegState.DONE, model = used.id, lines = lines.size, error = null) }
+                saveSessionSnapshot()
                 if (lines.isNotEmpty()) refreshHints()
                 if (lines.isNotEmpty() || forceAnalysis) requestAnalysis(false)
             }
@@ -638,6 +703,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         }
         setSeg(seg.number) { it.copy(state = SegState.DONE, model = used.id, lines = rawLines.size, error = null) }
         lastAnalysisAt = System.currentTimeMillis()
+        saveSessionSnapshot()
         if (rawLines.isNotEmpty()) refreshHints()
         _ui.update { it.copy(analysing = false, analysisNote = "Transcribed + classified at ${clock(it.elapsedSec)}") }
     }
@@ -725,6 +791,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     aiLog = (s.aiLog + "Analysis (${used.id}):\n$raw").takeLast(40)
                 )
             }
+            saveSessionSnapshot()
         } catch (e: CancellationException) {
             _ui.update { it.copy(analysing = false) }
             throw e
@@ -738,6 +805,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     fun endConsult() {
         if (!_ui.value.recording || _ui.value.busy != null) return
         _ui.update { it.copy(busy = "Stopping the microphone…") }
+        RecordingService.stop(getApplication())
         viewModelScope.launch {
             withContext(Dispatchers.IO) { recorder?.stop() }
             recorder = null
@@ -827,11 +895,13 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     aiLog = (it.aiLog + "Final (${used.id}):\n$raw").takeLast(40)
                 )
             }
+            saveSessionSnapshot()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             _ui.update { it.copy(busy = null, screen = Screen.REVIEW, finalFailed = true, soap = Notes.localDraft(it.case, cat, it.hints)) }
             addError("AI note failed: ${e.message}")
+            saveSessionSnapshot()
         }
     }
 
@@ -847,15 +917,20 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             }
             it.copy(case = Reducer.handle(it.case, action, cat), heard = heard)
         }
+        saveSessionSnapshot()
     }
 
     fun markTipDone(key: String) = _ui.update { it.copy(doneTips = it.doneTips + key) }
 
     /** Lets the doctor correct the SOAP note before sharing the slip. */
-    fun updateSoap(soap: Prompts.SoapNote) = _ui.update { it.copy(soap = soap) }
+    fun updateSoap(soap: Prompts.SoapNote) {
+        _ui.update { it.copy(soap = soap) }
+        saveSessionSnapshot()
+    }
 
     fun newConsultation() {
         if (_ui.value.recording) return
+        try { sessionFile().delete() } catch (e: Exception) { /* nothing to delete */ }
         _ui.value = withSettings(UiState(screen = Screen.SETUP))
     }
 
@@ -864,6 +939,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         tickerJob?.cancel()
         recorder?.stop()
+        RecordingService.stop(getApplication())
         super.onCleared()
     }
 

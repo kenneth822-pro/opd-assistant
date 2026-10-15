@@ -35,6 +35,11 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
+        // Only ship 64-bit ARM native libraries: sherpa-onnx and executorch also bundle
+        // x86/x86_64/armeabi-v7a .so files for emulators and legacy devices, which inflate the APK.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     signingConfigs {

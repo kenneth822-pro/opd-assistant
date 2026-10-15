@@ -2,36 +2,670 @@
   "version": "1.0.0",
   "note": "PROTOTYPE CONTENT - safety metadata and brand names are UNVERIFIED best-effort placeholders. pregnancy_rule / lactation_rule / renal_rule use OK | WARN | BLOCK (renal also ADJUST).",
   "drugs": [
-    { "id": "DRUG_PANTOPRAZOLE", "generic": "Pantoprazole", "brands": ["Pantop", "Pantocid", "Pan 40"], "classes": ["PPI"], "form": "TAB", "strength_value": 40, "strength_unit": "mg", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "OK" },
-    { "id": "DRUG_OMEPRAZOLE", "generic": "Omeprazole", "brands": ["Omez", "Ocid"], "classes": ["PPI"], "form": "CAP", "strength_value": 20, "strength_unit": "mg", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "OK" },
-    { "id": "DRUG_FAMOTIDINE", "generic": "Famotidine", "brands": ["Famocid", "Famotin"], "classes": ["H2RA"], "form": "TAB", "strength_value": 20, "strength_unit": "mg", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "ADJUST" },
-    { "id": "DRUG_AMLODIPINE", "generic": "Amlodipine", "brands": ["Amlod", "Amlopin", "Amlong"], "classes": ["CCB_DHP"], "form": "TAB", "strength_value": 5, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "OK", "renal_rule": "OK" },
-    { "id": "DRUG_TELMISARTAN", "generic": "Telmisartan", "brands": ["Telma", "Telsar", "Telmikind"], "classes": ["ARB"], "form": "TAB", "strength_value": 40, "strength_unit": "mg", "pregnancy_rule": "BLOCK", "lactation_rule": "WARN", "renal_rule": "ADJUST" },
-    { "id": "DRUG_LOSARTAN", "generic": "Losartan", "brands": ["Losar", "Cozaar", "Losacar"], "classes": ["ARB"], "form": "TAB", "strength_value": 50, "strength_unit": "mg", "pregnancy_rule": "BLOCK", "lactation_rule": "WARN", "renal_rule": "ADJUST" },
-    { "id": "DRUG_ENALAPRIL", "generic": "Enalapril", "brands": ["Envas", "Enam"], "classes": ["ACE_INHIBITOR"], "form": "TAB", "strength_value": 5, "strength_unit": "mg", "pregnancy_rule": "BLOCK", "lactation_rule": "WARN", "renal_rule": "ADJUST" },
-    { "id": "DRUG_HYDROCHLOROTHIAZIDE", "generic": "Hydrochlorothiazide", "brands": ["Aquazide", "HCTZ"], "classes": ["DIURETIC"], "form": "TAB", "strength_value": 12.5, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "WARN", "renal_rule": "ADJUST" },
-    { "id": "DRUG_METFORMIN", "generic": "Metformin", "brands": ["Glycomet", "Metfor", "Glucophage"], "classes": ["BIGUANIDE"], "form": "TAB", "strength_value": 500, "strength_unit": "mg", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "ADJUST" },
-    { "id": "DRUG_GLIMEPIRIDE", "generic": "Glimepiride", "brands": ["Amaryl", "Glimy", "Glimisave"], "classes": ["SULFONYLUREA"], "form": "TAB", "strength_value": 1, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "WARN", "renal_rule": "ADJUST", "elderly_caution": "Hypoglycaemia risk in older adults" },
-    { "id": "DRUG_AMOXICILLIN", "generic": "Amoxicillin", "brands": ["Amoxil", "Novamox", "Mox"], "classes": ["PENICILLIN"], "form": "CAP", "strength_value": 500, "strength_unit": "mg", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "ADJUST" },
-    { "id": "DRUG_AZITHROMYCIN", "generic": "Azithromycin", "brands": ["Azithral", "Azee", "Zithromax"], "classes": ["MACROLIDE", "QT_PROLONGING"], "form": "TAB", "strength_value": 500, "strength_unit": "mg", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "OK" },
-    { "id": "DRUG_CLARITHROMYCIN", "generic": "Clarithromycin", "brands": ["Claribid", "Klacid"], "classes": ["MACROLIDE", "QT_PROLONGING"], "form": "TAB", "strength_value": 500, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "WARN", "renal_rule": "ADJUST" },
-    { "id": "DRUG_CIPROFLOXACIN", "generic": "Ciprofloxacin", "brands": ["Ciplox", "Cifran", "Ciprobid"], "classes": ["FLUOROQUINOLONE", "QT_PROLONGING"], "form": "TAB", "strength_value": 500, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "WARN", "renal_rule": "ADJUST" },
-    { "id": "DRUG_CEFIXIME", "generic": "Cefixime", "brands": ["Taxim-O", "Cefix", "Zifi"], "classes": ["CEPHALOSPORIN_3"], "form": "TAB", "strength_value": 200, "strength_unit": "mg", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "ADJUST" },
-    { "id": "DRUG_NITROFURANTOIN", "generic": "Nitrofurantoin", "brands": ["Nitrofur", "Furadantin", "Macrobid"], "classes": ["NITROFURAN"], "form": "CAP", "strength_value": 100, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "WARN", "renal_rule": "BLOCK" },
-    { "id": "DRUG_METRONIDAZOLE", "generic": "Metronidazole", "brands": ["Flagyl", "Metrogyl", "Metron"], "classes": ["NITROIMIDAZOLE"], "form": "TAB", "strength_value": 400, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "WARN", "renal_rule": "OK" },
-    { "id": "DRUG_ORS", "generic": "Oral rehydration salts", "brands": ["Jeevan Jal", "ORS", "Electral"], "classes": ["ORS"], "form": "SACHET", "strength_value": 1, "strength_unit": "sachet", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "OK" },
-    { "id": "DRUG_SALBUTAMOL_MDI", "generic": "Salbutamol inhaler", "brands": ["Asthalin", "Ventolin"], "classes": ["SABA"], "form": "INHALER", "strength_value": 100, "strength_unit": "mcg/puff", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "OK" },
-    { "id": "DRUG_BUDESONIDE_FORMOTEROL", "generic": "Budesonide + Formoterol inhaler", "brands": ["Foracort", "Symbicort"], "classes": ["LABA_ICS"], "form": "INHALER", "strength_value": 200, "strength_unit": "mcg/6 mcg per puff", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "OK" },
-    { "id": "DRUG_PREDNISOLONE", "generic": "Prednisolone", "brands": ["Wysolone", "Predone"], "classes": ["CORTICOSTEROID"], "form": "TAB", "strength_value": 20, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "OK", "renal_rule": "OK" },
-    { "id": "DRUG_CETIRIZINE", "generic": "Cetirizine", "brands": ["Cetrine", "Cetzine", "Alerid"], "classes": ["ANTIHISTAMINE"], "form": "TAB", "strength_value": 10, "strength_unit": "mg", "pregnancy_rule": "OK", "lactation_rule": "WARN", "renal_rule": "ADJUST" },
-    { "id": "DRUG_PARACETAMOL", "generic": "Paracetamol", "brands": ["Cetamol", "Calpol", "Crocin", "Sinex"], "classes": ["ANALGESIC"], "form": "TAB", "strength_value": 500, "strength_unit": "mg", "pregnancy_rule": "OK", "lactation_rule": "OK", "renal_rule": "OK", "paracetamol_mg_per_unit": 500 },
-    { "id": "DRUG_IBUPROFEN", "generic": "Ibuprofen", "brands": ["Brufen", "Ibugesic"], "classes": ["NSAID"], "form": "TAB", "strength_value": 400, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "OK", "renal_rule": "BLOCK", "elderly_caution": "GI bleeding and kidney injury risk in older adults" },
-    { "id": "DRUG_IBUPROFEN_PARACETAMOL", "generic": "Ibuprofen + Paracetamol", "brands": ["Flexon", "Combiflam", "Ibuprofen Paracetamol"], "classes": ["NSAID", "ANALGESIC"], "form": "TAB", "strength_value": 400, "strength_unit": "mg/325 mg", "pregnancy_rule": "WARN", "lactation_rule": "OK", "renal_rule": "BLOCK", "paracetamol_mg_per_unit": 325, "elderly_caution": "GI bleeding and kidney injury risk in older adults" },
-    { "id": "DRUG_DICLOFENAC", "generic": "Diclofenac", "brands": ["Voveran", "Voltaren", "Diclomol"], "classes": ["NSAID"], "form": "TAB", "strength_value": 50, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "OK", "renal_rule": "BLOCK", "elderly_caution": "GI bleeding and kidney injury risk in older adults" },
-    { "id": "DRUG_ASPIRIN", "generic": "Aspirin", "brands": ["Ecosprin", "Disprin"], "classes": ["NSAID", "ANTIPLATELET"], "form": "TAB", "strength_value": 75, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "WARN", "renal_rule": "OK" },
-    { "id": "DRUG_WARFARIN", "generic": "Warfarin", "brands": ["Warf", "Coumadin"], "classes": ["ANTICOAGULANT"], "form": "TAB", "strength_value": 5, "strength_unit": "mg", "pregnancy_rule": "BLOCK", "lactation_rule": "OK", "renal_rule": "OK" },
-    { "id": "DRUG_ATORVASTATIN", "generic": "Atorvastatin", "brands": ["Atorva", "Lipitor", "Storvas"], "classes": ["STATIN"], "form": "TAB", "strength_value": 10, "strength_unit": "mg", "pregnancy_rule": "BLOCK", "lactation_rule": "BLOCK", "renal_rule": "OK" },
-    { "id": "DRUG_DOMPERIDONE", "generic": "Domperidone", "brands": ["Domstal", "Motilium"], "classes": ["ANTIEMETIC", "QT_PROLONGING"], "form": "TAB", "strength_value": 10, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "WARN", "renal_rule": "ADJUST", "elderly_caution": "QT prolongation risk in older adults" },
-    { "id": "DRUG_ONDANSETRON", "generic": "Ondansetron", "brands": ["Emeset", "Ondem", "Zofran"], "classes": ["ANTIEMETIC", "QT_PROLONGING"], "form": "TAB", "strength_value": 4, "strength_unit": "mg", "pregnancy_rule": "WARN", "lactation_rule": "OK", "renal_rule": "OK" }
+    {
+      "id": "DRUG_PANTOPRAZOLE",
+      "generic": "Pantoprazole",
+      "brands": [
+        "Pantop",
+        "Pantocid",
+        "Pan 40"
+      ],
+      "classes": [
+        "PPI"
+      ],
+      "form": "TAB",
+      "strength_value": 40,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_OMEPRAZOLE",
+      "generic": "Omeprazole",
+      "brands": [
+        "Omez",
+        "Ocid"
+      ],
+      "classes": [
+        "PPI"
+      ],
+      "form": "CAP",
+      "strength_value": 20,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_FAMOTIDINE",
+      "generic": "Famotidine",
+      "brands": [
+        "Famocid",
+        "Famotin"
+      ],
+      "classes": [
+        "H2RA"
+      ],
+      "form": "TAB",
+      "strength_value": 20,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_AMLODIPINE",
+      "generic": "Amlodipine",
+      "brands": [
+        "Amlod",
+        "Amlopin",
+        "Amlong"
+      ],
+      "classes": [
+        "CCB_DHP"
+      ],
+      "form": "TAB",
+      "strength_value": 5,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_TELMISARTAN",
+      "generic": "Telmisartan",
+      "brands": [
+        "Telma",
+        "Telsar",
+        "Telmikind"
+      ],
+      "classes": [
+        "ARB"
+      ],
+      "form": "TAB",
+      "strength_value": 40,
+      "strength_unit": "mg",
+      "pregnancy_rule": "BLOCK",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_LOSARTAN",
+      "generic": "Losartan",
+      "brands": [
+        "Losar",
+        "Cozaar",
+        "Losacar"
+      ],
+      "classes": [
+        "ARB"
+      ],
+      "form": "TAB",
+      "strength_value": 50,
+      "strength_unit": "mg",
+      "pregnancy_rule": "BLOCK",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_ENALAPRIL",
+      "generic": "Enalapril",
+      "brands": [
+        "Envas",
+        "Enam"
+      ],
+      "classes": [
+        "ACE_INHIBITOR"
+      ],
+      "form": "TAB",
+      "strength_value": 5,
+      "strength_unit": "mg",
+      "pregnancy_rule": "BLOCK",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_HYDROCHLOROTHIAZIDE",
+      "generic": "Hydrochlorothiazide",
+      "brands": [
+        "Aquazide",
+        "HCTZ"
+      ],
+      "classes": [
+        "DIURETIC"
+      ],
+      "form": "TAB",
+      "strength_value": 12.5,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_METFORMIN",
+      "generic": "Metformin",
+      "brands": [
+        "Glycomet",
+        "Metfor",
+        "Glucophage"
+      ],
+      "classes": [
+        "BIGUANIDE"
+      ],
+      "form": "TAB",
+      "strength_value": 500,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_GLIMEPIRIDE",
+      "generic": "Glimepiride",
+      "brands": [
+        "Amaryl",
+        "Glimy",
+        "Glimisave"
+      ],
+      "classes": [
+        "SULFONYLUREA"
+      ],
+      "form": "TAB",
+      "strength_value": 1,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST",
+      "elderly_caution": "Hypoglycaemia risk in older adults"
+    },
+    {
+      "id": "DRUG_AMOXICILLIN",
+      "generic": "Amoxicillin",
+      "brands": [
+        "Amoxil",
+        "Novamox",
+        "Mox"
+      ],
+      "classes": [
+        "PENICILLIN"
+      ],
+      "form": "CAP",
+      "strength_value": 500,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_AZITHROMYCIN",
+      "generic": "Azithromycin",
+      "brands": [
+        "Azithral",
+        "Azee",
+        "Zithromax"
+      ],
+      "classes": [
+        "MACROLIDE",
+        "QT_PROLONGING"
+      ],
+      "form": "TAB",
+      "strength_value": 500,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_CLARITHROMYCIN",
+      "generic": "Clarithromycin",
+      "brands": [
+        "Claribid",
+        "Klacid"
+      ],
+      "classes": [
+        "MACROLIDE",
+        "QT_PROLONGING"
+      ],
+      "form": "TAB",
+      "strength_value": 500,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_CIPROFLOXACIN",
+      "generic": "Ciprofloxacin",
+      "brands": [
+        "Ciplox",
+        "Cifran",
+        "Ciprobid"
+      ],
+      "classes": [
+        "FLUOROQUINOLONE",
+        "QT_PROLONGING"
+      ],
+      "form": "TAB",
+      "strength_value": 500,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_CEFIXIME",
+      "generic": "Cefixime",
+      "brands": [
+        "Taxim-O",
+        "Cefix",
+        "Zifi"
+      ],
+      "classes": [
+        "CEPHALOSPORIN_3"
+      ],
+      "form": "TAB",
+      "strength_value": 200,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_NITROFURANTOIN",
+      "generic": "Nitrofurantoin",
+      "brands": [
+        "Nitrofur",
+        "Furadantin",
+        "Macrobid"
+      ],
+      "classes": [
+        "NITROFURAN"
+      ],
+      "form": "CAP",
+      "strength_value": 100,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "BLOCK"
+    },
+    {
+      "id": "DRUG_METRONIDAZOLE",
+      "generic": "Metronidazole",
+      "brands": [
+        "Flagyl",
+        "Metrogyl",
+        "Metron"
+      ],
+      "classes": [
+        "NITROIMIDAZOLE"
+      ],
+      "form": "TAB",
+      "strength_value": 400,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_ORS",
+      "generic": "Oral rehydration salts",
+      "brands": [
+        "Jeevan Jal",
+        "ORS",
+        "Electral"
+      ],
+      "classes": [
+        "ORS"
+      ],
+      "form": "SACHET",
+      "strength_value": 1,
+      "strength_unit": "sachet",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_SALBUTAMOL_MDI",
+      "generic": "Salbutamol inhaler",
+      "brands": [
+        "Asthalin",
+        "Ventolin"
+      ],
+      "classes": [
+        "SABA"
+      ],
+      "form": "INHALER",
+      "strength_value": 100,
+      "strength_unit": "mcg/puff",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_BUDESONIDE_FORMOTEROL",
+      "generic": "Budesonide + Formoterol inhaler",
+      "brands": [
+        "Foracort",
+        "Symbicort"
+      ],
+      "classes": [
+        "LABA_ICS"
+      ],
+      "form": "INHALER",
+      "strength_value": 200,
+      "strength_unit": "mcg/6 mcg per puff",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_PREDNISOLONE",
+      "generic": "Prednisolone",
+      "brands": [
+        "Wysolone",
+        "Predone"
+      ],
+      "classes": [
+        "CORTICOSTEROID"
+      ],
+      "form": "TAB",
+      "strength_value": 20,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_CETIRIZINE",
+      "generic": "Cetirizine",
+      "brands": [
+        "Cetrine",
+        "Cetzine",
+        "Alerid"
+      ],
+      "classes": [
+        "ANTIHISTAMINE"
+      ],
+      "form": "TAB",
+      "strength_value": 10,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_PARACETAMOL",
+      "generic": "Paracetamol",
+      "brands": [
+        "Cetamol",
+        "Calpol",
+        "Crocin",
+        "Sinex"
+      ],
+      "classes": [
+        "ANALGESIC"
+      ],
+      "form": "TAB",
+      "strength_value": 500,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK",
+      "paracetamol_mg_per_unit": 500
+    },
+    {
+      "id": "DRUG_IBUPROFEN",
+      "generic": "Ibuprofen",
+      "brands": [
+        "Brufen",
+        "Ibugesic"
+      ],
+      "classes": [
+        "NSAID"
+      ],
+      "form": "TAB",
+      "strength_value": 400,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "OK",
+      "renal_rule": "BLOCK",
+      "elderly_caution": "GI bleeding and kidney injury risk in older adults"
+    },
+    {
+      "id": "DRUG_IBUPROFEN_PARACETAMOL",
+      "generic": "Ibuprofen + Paracetamol",
+      "brands": [
+        "Flexon",
+        "Combiflam",
+        "Ibuprofen Paracetamol"
+      ],
+      "classes": [
+        "NSAID",
+        "ANALGESIC"
+      ],
+      "form": "TAB",
+      "strength_value": 400,
+      "strength_unit": "mg/325 mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "OK",
+      "renal_rule": "BLOCK",
+      "paracetamol_mg_per_unit": 325,
+      "elderly_caution": "GI bleeding and kidney injury risk in older adults"
+    },
+    {
+      "id": "DRUG_DICLOFENAC",
+      "generic": "Diclofenac",
+      "brands": [
+        "Voveran",
+        "Voltaren",
+        "Diclomol"
+      ],
+      "classes": [
+        "NSAID"
+      ],
+      "form": "TAB",
+      "strength_value": 50,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "OK",
+      "renal_rule": "BLOCK",
+      "elderly_caution": "GI bleeding and kidney injury risk in older adults"
+    },
+    {
+      "id": "DRUG_ASPIRIN",
+      "generic": "Aspirin",
+      "brands": [
+        "Ecosprin",
+        "Disprin"
+      ],
+      "classes": [
+        "NSAID",
+        "ANTIPLATELET"
+      ],
+      "form": "TAB",
+      "strength_value": 75,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_WARFARIN",
+      "generic": "Warfarin",
+      "brands": [
+        "Warf",
+        "Coumadin"
+      ],
+      "classes": [
+        "ANTICOAGULANT"
+      ],
+      "form": "TAB",
+      "strength_value": 5,
+      "strength_unit": "mg",
+      "pregnancy_rule": "BLOCK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_ATORVASTATIN",
+      "generic": "Atorvastatin",
+      "brands": [
+        "Atorva",
+        "Lipitor",
+        "Storvas"
+      ],
+      "classes": [
+        "STATIN"
+      ],
+      "form": "TAB",
+      "strength_value": 10,
+      "strength_unit": "mg",
+      "pregnancy_rule": "BLOCK",
+      "lactation_rule": "BLOCK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_DOMPERIDONE",
+      "generic": "Domperidone",
+      "brands": [
+        "Domstal",
+        "Motilium"
+      ],
+      "classes": [
+        "ANTIEMETIC",
+        "QT_PROLONGING"
+      ],
+      "form": "TAB",
+      "strength_value": 10,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST",
+      "elderly_caution": "QT prolongation risk in older adults"
+    },
+    {
+      "id": "DRUG_ONDANSETRON",
+      "generic": "Ondansetron",
+      "brands": [
+        "Emeset",
+        "Ondem",
+        "Zofran"
+      ],
+      "classes": [
+        "ANTIEMETIC",
+        "QT_PROLONGING"
+      ],
+      "form": "TAB",
+      "strength_value": 4,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_PHENOXYMETHYLPENICILLIN",
+      "generic": "Phenoxymethylpenicillin",
+      "brands": [
+        "Pen V",
+        "Pen-Vee"
+      ],
+      "classes": [
+        "PENICILLIN"
+      ],
+      "form": "TAB",
+      "strength_value": 250,
+      "strength_unit": "mg",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "ADJUST"
+    },
+    {
+      "id": "DRUG_CLOTRIMAZOLE",
+      "generic": "Clotrimazole cream",
+      "brands": [
+        "Candid",
+        "Clotri"
+      ],
+      "classes": [
+        "TOPICAL_ANTIFUNGAL"
+      ],
+      "form": "TOPICAL",
+      "strength_value": 1,
+      "strength_unit": "%",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_PERMETHRIN",
+      "generic": "Permethrin cream",
+      "brands": [
+        "Permethrin",
+        "Scabper"
+      ],
+      "classes": [
+        "SCABICIDE"
+      ],
+      "form": "TOPICAL",
+      "strength_value": 5,
+      "strength_unit": "%",
+      "pregnancy_rule": "OK",
+      "lactation_rule": "OK",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_TERBINAFINE_TOP",
+      "generic": "Terbinafine cream",
+      "brands": [
+        "Terbicip",
+        "Lamisil"
+      ],
+      "classes": [
+        "TOPICAL_ANTIFUNGAL"
+      ],
+      "form": "TOPICAL",
+      "strength_value": 1,
+      "strength_unit": "%",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "OK"
+    },
+    {
+      "id": "DRUG_COLCHICINE",
+      "generic": "Colchicine",
+      "brands": [
+        "Zycolchin",
+        "Colcrys"
+      ],
+      "classes": [
+        "ANTI_GOUT"
+      ],
+      "form": "TAB",
+      "strength_value": 0.5,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "WARN",
+      "renal_rule": "ADJUST",
+      "elderly_caution": "Reduce dose: narrow safety margin in older adults"
+    },
+    {
+      "id": "DRUG_NAPROXEN",
+      "generic": "Naproxen",
+      "brands": [
+        "Naprosyn",
+        "Naxen"
+      ],
+      "classes": [
+        "NSAID"
+      ],
+      "form": "TAB",
+      "strength_value": 250,
+      "strength_unit": "mg",
+      "pregnancy_rule": "WARN",
+      "lactation_rule": "OK",
+      "renal_rule": "BLOCK",
+      "elderly_caution": "GI bleeding and kidney injury risk in older adults"
+    }
   ]
 }

@@ -32,7 +32,7 @@ class EngineTest {
     fun catalogueIntegrityHasNoErrors() {
         val errors = CatalogueIntegrity.check(c)
         assertTrue("Catalogue errors:\n" + errors.joinToString("\n"), errors.isEmpty())
-        assertEquals(14, c.conditions.size)
+        assertEquals(20, c.conditions.size)
     }
 
     @Test
@@ -709,5 +709,68 @@ class EngineTest {
         // Out of range (< 90 F or > 110 F after conversion) is dropped
         val outOfRange = Reducer.mergeVitals(old, Vitals(tempF = 50.0))
         assertNull(outOfRange.tempF)
+    }
+
+    /* ---------------- crash-safe session persistence ---------------- */
+
+    @Test
+    fun caseStateJsonRoundTripPreservesAllFields() {
+        var s = start(42, Gender.FEMALE)
+        s = dr(s, DoctorAction.ConfirmPregnancy(Pregnancy.PREGNANT))
+        s = ai(s, LiveDelta(
+            transcript = listOf(TranscriptLine("patient", "कालो दिसा भयो", 1200)),
+            problems = listOf(ProblemInput(
+                "COND_APD",
+                symptoms = listOf(SymptomInput("epigastric burning", "2 weeks")),
+                negatives = listOf(NegativeInput("vomiting")),
+                exploredQuestionIds = listOf("q_apd_duration")
+            )),
+            flagsIdentified = listOf(FlagInput("rf_gi_melena", true, "कालो दिसा")),
+            allergies = listOf(AllergyInput("amoxicillin", "rash")),
+            currentMeds = listOf(MedInput("Telma 40", 40.0)),
+            vitals = Vitals(bpSystolic = 150, bpDiastolic = 95, rr = 22),
+            dictatedItems = listOf(DictatedInput("Tab Brufen 400", 1.0, "BD", 5)),
+            nextQuestions = listOf(AiQuestion("ज्वरो छ?", "Any fever?", "rule out infection"))
+        ))
+        s = dr(s, DoctorAction.AcceptRegimen("APD-01"))
+        s = dr(s, DoctorAction.DismissRegimen("APD-02"))
+
+        val restored = CaseState.fromJ(J.parse(s.toJ().toJson()) as J.Obj)
+        assertEquals(s, restored)
+    }
+
+    @Test
+    fun soapNoteJsonRoundTripPreservesAllFields() {
+        val n = Prompts.SoapNote(
+            chiefComplaint = "Burning epigastric pain",
+            history = "2 weeks, worse on empty stomach",
+            examSpoken = "BP 130/80",
+            assessment = "APD",
+            planSpoken = "Pantoprazole 40 mg",
+            followUp = "2 weeks",
+            adviceSpoken = "Avoid NSAIDs",
+            localDraft = true
+        )
+        val restored = Prompts.SoapNote.fromJ(J.parse(n.toJ().toJson()) as J.Obj)
+        assertEquals(n, restored)
+    }
+
+    /* ---------------- expanded catalogue ---------------- */
+
+    @Test
+    fun newConditionsAreWiredAndSearchable() {
+        for (code in listOf("COND_TONSILLITIS", "COND_AOM", "COND_TINEA", "COND_SCABIES", "COND_GOUT", "COND_URI")) {
+            val def = c.conditions[code]
+            assertNotNull("missing $code", def)
+            assertTrue("$code has no keywords", def!!.keywords.isNotEmpty())
+            assertTrue("$code has no INITIAL checklist", def.visitTypes["INITIAL"] != null)
+            assertTrue("$code has no linked regimen", def.linkedRegimens.isNotEmpty())
+        }
+        // Every new regimen must be reachable (the integrity check already enforces this, but assert intent).
+        assertTrue(c.regimens.values.any { it.conditionCode == "COND_GOUT" })
+        assertTrue(c.drugs.containsKey("DRUG_NAPROXEN"))
+        assertTrue(c.drugs.containsKey("DRUG_COLCHICINE"))
+        assertTrue(c.drugs.containsKey("DRUG_PERMETHRIN"))
+        assertTrue(c.drugs.containsKey("DRUG_CLOTRIMAZOLE"))
     }
 }

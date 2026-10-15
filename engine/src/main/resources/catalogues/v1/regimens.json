@@ -3,113 +3,581 @@
   "note": "PROTOTYPE CONTENT - every regimen is UNVERIFIED and must be checked against current MoHP Nepal Standard Treatment Protocols / National Antimicrobial Treatment Guidelines by a clinician. Order of linked_regimens in conditions.json is the order the app tries them.",
   "regimens": [
     {
-      "regimen_id": "APD-01", "condition_code": "COND_APD", "line_of_therapy": "FIRST_LINE",
+      "regimen_id": "APD-01",
+      "condition_code": "COND_APD",
+      "line_of_therapy": "FIRST_LINE",
       "label": "Pantoprazole 40 mg once daily before breakfast, 14 days",
-      "components": [ { "drug_id": "DRUG_PANTOPRAZOLE", "dose_count": 1, "route": "PO", "frequency": "OD", "timing": "AC", "duration_days": 14 } ]
-    },
-    {
-      "regimen_id": "APD-02", "condition_code": "COND_APD", "line_of_therapy": "ALTERNATIVE",
-      "label": "Famotidine 20 mg twice daily, 14 days",
-      "components": [ { "drug_id": "DRUG_FAMOTIDINE", "dose_count": 1, "route": "PO", "frequency": "BD", "timing": "AC", "duration_days": 14 } ]
-    },
-    {
-      "regimen_id": "HTN-02", "condition_code": "COND_HTN", "line_of_therapy": "FIRST_LINE",
-      "label": "Telmisartan 40 mg once daily (diabetes / kidney protection)",
-      "eligibility": { "requires_any": ["COMORB_T2DM", "COND_T2DM"] },
-      "components": [ { "drug_id": "DRUG_TELMISARTAN", "dose_count": 1, "route": "PO", "frequency": "OD", "timing": "ANY", "duration_days": 30 } ]
-    },
-    {
-      "regimen_id": "HTN-01", "condition_code": "COND_HTN", "line_of_therapy": "FIRST_LINE",
-      "label": "Amlodipine 5 mg once daily",
-      "components": [ { "drug_id": "DRUG_AMLODIPINE", "dose_count": 1, "route": "PO", "frequency": "OD", "timing": "ANY", "duration_days": 30 } ]
-    },
-    {
-      "regimen_id": "T2DM-01", "condition_code": "COND_T2DM", "line_of_therapy": "FIRST_LINE",
-      "label": "Metformin 500 mg twice daily after food",
-      "components": [ { "drug_id": "DRUG_METFORMIN", "dose_count": 1, "route": "PO", "frequency": "BD", "timing": "PC", "duration_days": 30 } ]
-    },
-    {
-      "regimen_id": "T2DM-02", "condition_code": "COND_T2DM", "line_of_therapy": "ALTERNATIVE",
-      "label": "Glimepiride 1 mg once daily before breakfast",
-      "components": [ { "drug_id": "DRUG_GLIMEPIRIDE", "dose_count": 1, "route": "PO", "frequency": "OD", "timing": "AC", "duration_days": 30 } ]
-    },
-    {
-      "regimen_id": "CAP-01", "condition_code": "COND_CAP", "line_of_therapy": "FIRST_LINE",
-      "label": "Amoxicillin 1 g three times daily, 5 days",
-      "eligibility": { "min_age": 16 },
-      "components": [ { "drug_id": "DRUG_AMOXICILLIN", "dose_count": 2, "route": "PO", "frequency": "TDS", "timing": "PC", "duration_days": 5 } ]
-    },
-    {
-      "regimen_id": "CAP-02", "condition_code": "COND_CAP", "line_of_therapy": "ALLERGY_ALTERNATIVE",
-      "label": "Azithromycin 500 mg once daily, 3 days (penicillin allergy)",
-      "eligibility": { "min_age": 16 },
-      "components": [ { "drug_id": "DRUG_AZITHROMYCIN", "dose_count": 1, "route": "PO", "frequency": "OD", "timing": "PC", "duration_days": 3 } ]
-    },
-    {
-      "regimen_id": "AGE-01", "condition_code": "COND_AGE", "line_of_therapy": "FIRST_LINE",
-      "label": "ORS after each loose stool",
-      "components": [ { "drug_id": "DRUG_ORS", "dose_count": 1, "route": "PO", "frequency": "PRN", "timing": "ANY", "prn_indication": "LOOSE_STOOL", "max_doses_per_day": 10, "note_en": "Dissolve 1 sachet in 1 litre of clean water; drink 1-2 glasses after each loose stool", "note_ne": "१ प्याकेट जीवनजल १ लिटर सफा पानीमा घोल्ने; हरेक पटक पातलो दिसा भएपछि १-२ गिलास पिउने" } ]
-    },
-    {
-      "regimen_id": "DYS-01", "condition_code": "COND_DYSENTERY", "line_of_therapy": "FIRST_LINE",
-      "label": "Ciprofloxacin 500 mg twice daily, 3 days",
-      "eligibility": { "min_age": 18 },
-      "components": [ { "drug_id": "DRUG_CIPROFLOXACIN", "dose_count": 1, "route": "PO", "frequency": "BD", "timing": "PC", "duration_days": 3 } ]
-    },
-    {
-      "regimen_id": "DYS-02", "condition_code": "COND_DYSENTERY", "line_of_therapy": "ALTERNATIVE",
-      "label": "Azithromycin 500 mg once daily, 3 days",
-      "components": [ { "drug_id": "DRUG_AZITHROMYCIN", "dose_count": 1, "route": "PO", "frequency": "OD", "timing": "PC", "duration_days": 3 } ]
-    },
-    {
-      "regimen_id": "ENT-01", "condition_code": "COND_ENTERIC", "line_of_therapy": "FIRST_LINE",
-      "label": "Cefixime 400 mg twice daily, 10 days",
-      "components": [ { "drug_id": "DRUG_CEFIXIME", "dose_count": 2, "route": "PO", "frequency": "BD", "timing": "PC", "duration_days": 10 } ]
-    },
-    {
-      "regimen_id": "ENT-02", "condition_code": "COND_ENTERIC", "line_of_therapy": "ALTERNATIVE",
-      "label": "Azithromycin 1 g once daily, 7 days",
-      "components": [ { "drug_id": "DRUG_AZITHROMYCIN", "dose_count": 2, "route": "PO", "frequency": "OD", "timing": "PC", "duration_days": 7 } ]
-    },
-    {
-      "regimen_id": "COPD-01", "condition_code": "COND_COPD", "line_of_therapy": "FIRST_LINE",
-      "label": "Salbutamol inhaler as needed + Prednisolone 40 mg once daily, 5 days",
       "components": [
-        { "drug_id": "DRUG_SALBUTAMOL_MDI", "dose_count": 2, "route": "INHALATION", "frequency": "PRN", "timing": "ANY", "prn_indication": "BREATHLESS", "max_doses_per_day": 4 },
-        { "drug_id": "DRUG_PREDNISOLONE", "dose_count": 2, "route": "PO", "frequency": "OD", "timing": "PC", "duration_days": 5 }
+        {
+          "drug_id": "DRUG_PANTOPRAZOLE",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "AC",
+          "duration_days": 14
+        }
       ]
     },
     {
-      "regimen_id": "ASTH-01", "condition_code": "COND_ASTHMA", "line_of_therapy": "FIRST_LINE",
+      "regimen_id": "APD-02",
+      "condition_code": "COND_APD",
+      "line_of_therapy": "ALTERNATIVE",
+      "label": "Famotidine 20 mg twice daily, 14 days",
+      "components": [
+        {
+          "drug_id": "DRUG_FAMOTIDINE",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "BD",
+          "timing": "AC",
+          "duration_days": 14
+        }
+      ]
+    },
+    {
+      "regimen_id": "HTN-02",
+      "condition_code": "COND_HTN",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Telmisartan 40 mg once daily (diabetes / kidney protection)",
+      "eligibility": {
+        "requires_any": [
+          "COMORB_T2DM",
+          "COND_T2DM"
+        ]
+      },
+      "components": [
+        {
+          "drug_id": "DRUG_TELMISARTAN",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "ANY",
+          "duration_days": 30
+        }
+      ]
+    },
+    {
+      "regimen_id": "HTN-01",
+      "condition_code": "COND_HTN",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Amlodipine 5 mg once daily",
+      "components": [
+        {
+          "drug_id": "DRUG_AMLODIPINE",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "ANY",
+          "duration_days": 30
+        }
+      ]
+    },
+    {
+      "regimen_id": "T2DM-01",
+      "condition_code": "COND_T2DM",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Metformin 500 mg twice daily after food",
+      "components": [
+        {
+          "drug_id": "DRUG_METFORMIN",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "BD",
+          "timing": "PC",
+          "duration_days": 30
+        }
+      ]
+    },
+    {
+      "regimen_id": "T2DM-02",
+      "condition_code": "COND_T2DM",
+      "line_of_therapy": "ALTERNATIVE",
+      "label": "Glimepiride 1 mg once daily before breakfast",
+      "components": [
+        {
+          "drug_id": "DRUG_GLIMEPIRIDE",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "AC",
+          "duration_days": 30
+        }
+      ]
+    },
+    {
+      "regimen_id": "CAP-01",
+      "condition_code": "COND_CAP",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Amoxicillin 1 g three times daily, 5 days",
+      "eligibility": {
+        "min_age": 16
+      },
+      "components": [
+        {
+          "drug_id": "DRUG_AMOXICILLIN",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "TDS",
+          "timing": "PC",
+          "duration_days": 5
+        }
+      ]
+    },
+    {
+      "regimen_id": "CAP-02",
+      "condition_code": "COND_CAP",
+      "line_of_therapy": "ALLERGY_ALTERNATIVE",
+      "label": "Azithromycin 500 mg once daily, 3 days (penicillin allergy)",
+      "eligibility": {
+        "min_age": 16
+      },
+      "components": [
+        {
+          "drug_id": "DRUG_AZITHROMYCIN",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "PC",
+          "duration_days": 3
+        }
+      ]
+    },
+    {
+      "regimen_id": "AGE-01",
+      "condition_code": "COND_AGE",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "ORS after each loose stool",
+      "components": [
+        {
+          "drug_id": "DRUG_ORS",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "PRN",
+          "timing": "ANY",
+          "prn_indication": "LOOSE_STOOL",
+          "max_doses_per_day": 10,
+          "note_en": "Dissolve 1 sachet in 1 litre of clean water; drink 1-2 glasses after each loose stool",
+          "note_ne": "१ प्याकेट जीवनजल १ लिटर सफा पानीमा घोल्ने; हरेक पटक पातलो दिसा भएपछि १-२ गिलास पिउने"
+        }
+      ]
+    },
+    {
+      "regimen_id": "DYS-01",
+      "condition_code": "COND_DYSENTERY",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Ciprofloxacin 500 mg twice daily, 3 days",
+      "eligibility": {
+        "min_age": 18
+      },
+      "components": [
+        {
+          "drug_id": "DRUG_CIPROFLOXACIN",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "BD",
+          "timing": "PC",
+          "duration_days": 3
+        }
+      ]
+    },
+    {
+      "regimen_id": "DYS-02",
+      "condition_code": "COND_DYSENTERY",
+      "line_of_therapy": "ALTERNATIVE",
+      "label": "Azithromycin 500 mg once daily, 3 days",
+      "components": [
+        {
+          "drug_id": "DRUG_AZITHROMYCIN",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "PC",
+          "duration_days": 3
+        }
+      ]
+    },
+    {
+      "regimen_id": "ENT-01",
+      "condition_code": "COND_ENTERIC",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Cefixime 400 mg twice daily, 10 days",
+      "components": [
+        {
+          "drug_id": "DRUG_CEFIXIME",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "BD",
+          "timing": "PC",
+          "duration_days": 10
+        }
+      ]
+    },
+    {
+      "regimen_id": "ENT-02",
+      "condition_code": "COND_ENTERIC",
+      "line_of_therapy": "ALTERNATIVE",
+      "label": "Azithromycin 1 g once daily, 7 days",
+      "components": [
+        {
+          "drug_id": "DRUG_AZITHROMYCIN",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "PC",
+          "duration_days": 7
+        }
+      ]
+    },
+    {
+      "regimen_id": "COPD-01",
+      "condition_code": "COND_COPD",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Salbutamol inhaler as needed + Prednisolone 40 mg once daily, 5 days",
+      "components": [
+        {
+          "drug_id": "DRUG_SALBUTAMOL_MDI",
+          "dose_count": 2,
+          "route": "INHALATION",
+          "frequency": "PRN",
+          "timing": "ANY",
+          "prn_indication": "BREATHLESS",
+          "max_doses_per_day": 4
+        },
+        {
+          "drug_id": "DRUG_PREDNISOLONE",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "PC",
+          "duration_days": 5
+        }
+      ]
+    },
+    {
+      "regimen_id": "ASTH-01",
+      "condition_code": "COND_ASTHMA",
+      "line_of_therapy": "FIRST_LINE",
       "label": "Budesonide/Formoterol 200/6 inhaler, 1 puff twice daily",
-      "components": [ { "drug_id": "DRUG_BUDESONIDE_FORMOTEROL", "dose_count": 1, "route": "INHALATION", "frequency": "BD", "timing": "ANY", "duration_days": 30, "note_en": "Rinse mouth after use", "note_ne": "तानेपछि मुख कुल्ला गर्ने" } ]
+      "components": [
+        {
+          "drug_id": "DRUG_BUDESONIDE_FORMOTEROL",
+          "dose_count": 1,
+          "route": "INHALATION",
+          "frequency": "BD",
+          "timing": "ANY",
+          "duration_days": 30,
+          "note_en": "Rinse mouth after use",
+          "note_ne": "तानेपछि मुख कुल्ला गर्ने"
+        }
+      ]
     },
     {
-      "regimen_id": "AR-01", "condition_code": "COND_ALLERGIC_RHINITIS", "line_of_therapy": "FIRST_LINE",
+      "regimen_id": "AR-01",
+      "condition_code": "COND_ALLERGIC_RHINITIS",
+      "line_of_therapy": "FIRST_LINE",
       "label": "Cetirizine 10 mg at night, 7 days",
-      "components": [ { "drug_id": "DRUG_CETIRIZINE", "dose_count": 1, "route": "PO", "frequency": "OD", "timing": "HS", "duration_days": 7 } ]
+      "components": [
+        {
+          "drug_id": "DRUG_CETIRIZINE",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "HS",
+          "duration_days": 7
+        }
+      ]
     },
     {
-      "regimen_id": "LBP-01", "condition_code": "COND_LOW_BACK_PAIN", "line_of_therapy": "FIRST_LINE",
+      "regimen_id": "LBP-01",
+      "condition_code": "COND_LOW_BACK_PAIN",
+      "line_of_therapy": "FIRST_LINE",
       "label": "Paracetamol 1 g three times daily, 5 days",
-      "components": [ { "drug_id": "DRUG_PARACETAMOL", "dose_count": 2, "route": "PO", "frequency": "TDS", "timing": "PC", "duration_days": 5 } ]
+      "components": [
+        {
+          "drug_id": "DRUG_PARACETAMOL",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "TDS",
+          "timing": "PC",
+          "duration_days": 5
+        }
+      ]
     },
     {
-      "regimen_id": "HEAD-01", "condition_code": "COND_TENSION_HEADACHE", "line_of_therapy": "FIRST_LINE",
+      "regimen_id": "HEAD-01",
+      "condition_code": "COND_TENSION_HEADACHE",
+      "line_of_therapy": "FIRST_LINE",
       "label": "Paracetamol 1 g when needed (max 4 times a day)",
-      "components": [ { "drug_id": "DRUG_PARACETAMOL", "dose_count": 2, "route": "PO", "frequency": "PRN", "timing": "PC", "prn_indication": "PAIN", "max_doses_per_day": 4, "duration_days": 5 } ]
+      "components": [
+        {
+          "drug_id": "DRUG_PARACETAMOL",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "PRN",
+          "timing": "PC",
+          "prn_indication": "PAIN",
+          "max_doses_per_day": 4,
+          "duration_days": 5
+        }
+      ]
     },
     {
-      "regimen_id": "UTI-01", "condition_code": "COND_UTI", "line_of_therapy": "FIRST_LINE",
+      "regimen_id": "UTI-01",
+      "condition_code": "COND_UTI",
+      "line_of_therapy": "FIRST_LINE",
       "label": "Nitrofurantoin 100 mg twice daily, 5 days (women)",
-      "eligibility": { "genders": ["FEMALE"], "min_age": 16 },
-      "components": [ { "drug_id": "DRUG_NITROFURANTOIN", "dose_count": 1, "route": "PO", "frequency": "BD", "timing": "PC", "duration_days": 5 } ]
+      "eligibility": {
+        "genders": [
+          "FEMALE"
+        ],
+        "min_age": 16
+      },
+      "components": [
+        {
+          "drug_id": "DRUG_NITROFURANTOIN",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "BD",
+          "timing": "PC",
+          "duration_days": 5
+        }
+      ]
     },
     {
-      "regimen_id": "UTI-02", "condition_code": "COND_UTI", "line_of_therapy": "ALTERNATIVE",
+      "regimen_id": "UTI-02",
+      "condition_code": "COND_UTI",
+      "line_of_therapy": "ALTERNATIVE",
       "label": "Cefixime 200 mg twice daily, 5 days",
-      "eligibility": { "min_age": 16 },
-      "components": [ { "drug_id": "DRUG_CEFIXIME", "dose_count": 1, "route": "PO", "frequency": "BD", "timing": "PC", "duration_days": 5 } ]
+      "eligibility": {
+        "min_age": 16
+      },
+      "components": [
+        {
+          "drug_id": "DRUG_CEFIXIME",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "BD",
+          "timing": "PC",
+          "duration_days": 5
+        }
+      ]
+    },
+    {
+      "regimen_id": "TONS-01",
+      "condition_code": "COND_TONSILLITIS",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Phenoxymethylpenicillin 500 mg twice daily, 10 days",
+      "components": [
+        {
+          "drug_id": "DRUG_PHENOXYMETHYLPENICILLIN",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "BD",
+          "timing": "PC",
+          "duration_days": 10
+        }
+      ]
+    },
+    {
+      "regimen_id": "TONS-02",
+      "condition_code": "COND_TONSILLITIS",
+      "line_of_therapy": "ALTERNATIVE",
+      "label": "Azithromycin 500 mg once daily, 5 days (penicillin allergy)",
+      "components": [
+        {
+          "drug_id": "DRUG_AZITHROMYCIN",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "PC",
+          "duration_days": 5
+        }
+      ]
+    },
+    {
+      "regimen_id": "TONS-03",
+      "condition_code": "COND_TONSILLITIS",
+      "line_of_therapy": "SYMPTOMATIC",
+      "label": "Paracetamol 1 g three times daily when needed (max 4 times a day)",
+      "components": [
+        {
+          "drug_id": "DRUG_PARACETAMOL",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "PRN",
+          "timing": "PC",
+          "prn_indication": "PAIN",
+          "max_doses_per_day": 4,
+          "duration_days": 5
+        }
+      ]
+    },
+    {
+      "regimen_id": "AOM-01",
+      "condition_code": "COND_AOM",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Amoxicillin 500 mg three times daily, 7 days",
+      "components": [
+        {
+          "drug_id": "DRUG_AMOXICILLIN",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "TDS",
+          "timing": "PC",
+          "duration_days": 7
+        }
+      ]
+    },
+    {
+      "regimen_id": "AOM-02",
+      "condition_code": "COND_AOM",
+      "line_of_therapy": "SYMPTOMATIC",
+      "label": "Paracetamol 1 g three times daily when needed (max 4 times a day)",
+      "components": [
+        {
+          "drug_id": "DRUG_PARACETAMOL",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "PRN",
+          "timing": "PC",
+          "prn_indication": "PAIN",
+          "max_doses_per_day": 4,
+          "duration_days": 5
+        }
+      ]
+    },
+    {
+      "regimen_id": "TINEA-01",
+      "condition_code": "COND_TINEA",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Clotrimazole 1% cream applied twice daily, 4 weeks",
+      "components": [
+        {
+          "drug_id": "DRUG_CLOTRIMAZOLE",
+          "dose_count": 1,
+          "route": "TOPICAL",
+          "frequency": "BD",
+          "timing": "ANY",
+          "duration_days": 28,
+          "note_en": "Apply a thin layer to the affected skin and 2 cm beyond; keep the area dry",
+          "note_ne": "प्रभावित छाला र वरिपरि २ से.मि. सम्म पातलो तहमा लगाउने; ठाउँ सुक्खा राख्ने"
+        }
+      ]
+    },
+    {
+      "regimen_id": "TINEA-02",
+      "condition_code": "COND_TINEA",
+      "line_of_therapy": "SYMPTOMATIC",
+      "label": "Cetirizine 10 mg at night, 7 days",
+      "components": [
+        {
+          "drug_id": "DRUG_CETIRIZINE",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "HS",
+          "duration_days": 7
+        }
+      ]
+    },
+    {
+      "regimen_id": "SCAB-01",
+      "condition_code": "COND_SCABIES",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Permethrin 5% cream applied to the whole body, repeat after 7 days",
+      "components": [
+        {
+          "drug_id": "DRUG_PERMETHRIN",
+          "dose_count": 1,
+          "route": "TOPICAL",
+          "frequency": "STAT",
+          "timing": "HS",
+          "note_en": "Apply from neck down, leave 8-12 hours, then wash off; treat all household members on the same day",
+          "note_ne": "घाँटीदेखि तल सारा शरीरमा लगाउने, ८-१२ घण्टा राखेर नुहाउने; घरका सबैलाई एउटै दिन उपचार गर्ने"
+        }
+      ]
+    },
+    {
+      "regimen_id": "SCAB-02",
+      "condition_code": "COND_SCABIES",
+      "line_of_therapy": "SYMPTOMATIC",
+      "label": "Cetirizine 10 mg at night, 7 days",
+      "components": [
+        {
+          "drug_id": "DRUG_CETIRIZINE",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "HS",
+          "duration_days": 7
+        }
+      ]
+    },
+    {
+      "regimen_id": "GOUT-01",
+      "condition_code": "COND_GOUT",
+      "line_of_therapy": "FIRST_LINE",
+      "label": "Naproxen 250 mg twice daily, 5 days",
+      "components": [
+        {
+          "drug_id": "DRUG_NAPROXEN",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "BD",
+          "timing": "PC",
+          "duration_days": 5
+        }
+      ]
+    },
+    {
+      "regimen_id": "GOUT-02",
+      "condition_code": "COND_GOUT",
+      "line_of_therapy": "ALTERNATIVE",
+      "label": "Colchicine 0.5 mg twice daily, 5 days",
+      "components": [
+        {
+          "drug_id": "DRUG_COLCHICINE",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "BD",
+          "timing": "PC",
+          "duration_days": 5
+        }
+      ]
+    },
+    {
+      "regimen_id": "URI-01",
+      "condition_code": "COND_URI",
+      "line_of_therapy": "SYMPTOMATIC",
+      "label": "Paracetamol 1 g three times daily when needed (max 4 times a day)",
+      "components": [
+        {
+          "drug_id": "DRUG_PARACETAMOL",
+          "dose_count": 2,
+          "route": "PO",
+          "frequency": "PRN",
+          "timing": "PC",
+          "prn_indication": "PAIN",
+          "max_doses_per_day": 4,
+          "duration_days": 5
+        }
+      ]
+    },
+    {
+      "regimen_id": "URI-02",
+      "condition_code": "COND_URI",
+      "line_of_therapy": "SYMPTOMATIC",
+      "label": "Cetirizine 10 mg at night, 5 days",
+      "components": [
+        {
+          "drug_id": "DRUG_CETIRIZINE",
+          "dose_count": 1,
+          "route": "PO",
+          "frequency": "OD",
+          "timing": "HS",
+          "duration_days": 5
+        }
+      ]
     }
   ]
 }

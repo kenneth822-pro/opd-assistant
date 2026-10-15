@@ -727,6 +727,339 @@
         "पिसाब",
         "छिटो छिटो पिसाब"
       ]
+    },
+    {
+      "condition_code": "COND_TONSILLITIS",
+      "display_name": "Acute pharyngitis / tonsillitis",
+      "icd11_code": "CA02",
+      "cues": "घाँटी दुख्ने, निल्न गाह्रो, टन्सिल सुन्निने",
+      "visit_types": {
+        "INITIAL": {
+          "min_questions": 3,
+          "required_questions": [
+            {
+              "id": "q_tons_duration",
+              "prompt_en": "How many days of sore throat and fever?",
+              "prompt_ne": "घाँटी दुखेको र ज्वरो आएको कति दिन भयो?"
+            },
+            {
+              "id": "q_tons_swallow",
+              "prompt_en": "Pain on swallowing, unable to eat or drink?",
+              "prompt_ne": "निल्दा दुख्छ, खान/पिउन गाह्रो छ?"
+            },
+            {
+              "id": "q_tons_voice",
+              "prompt_en": "Change in voice, drooling, or noisy breathing?",
+              "prompt_ne": "आवाज परिवर्तन, थुक निल्न नसक्ने वा सास फेर्दा आवाज?"
+            },
+            {
+              "id": "q_tons_abx",
+              "prompt_en": "Taken any antibiotic already?",
+              "prompt_ne": "पहिले नै एन्टिबायोटिक खानुभयो?"
+            },
+            {
+              "id": "q_tons_rash",
+              "prompt_en": "Rash or joint pain along with the sore throat?",
+              "prompt_ne": "घाँटी दुखाइसँगै दाना वा जोर्नी दुख्ने?"
+            }
+          ]
+        }
+      },
+      "mandatory_red_flags": [
+        "rf_stridor_airway"
+      ],
+      "linked_regimens": [
+        "TONS-01",
+        "TONS-02",
+        "TONS-03"
+      ],
+      "linked_investigations": [
+        "INV_CBC"
+      ],
+      "keywords": [
+        "sore throat",
+        "throat pain",
+        "tonsil",
+        "tonsillitis",
+        "pharyngitis",
+        "घाँटी दुख",
+        "घाँटी पोल",
+        "टन्सिल",
+        "निल्न गाह्रो",
+        "घाँटी सुन्नि",
+        "घाँटी भारी"
+      ]
+    },
+    {
+      "condition_code": "COND_AOM",
+      "display_name": "Acute otitis media",
+      "icd11_code": "AB00",
+      "cues": "कान दुख्ने, कान पाकेको, ज्वरो",
+      "visit_types": {
+        "INITIAL": {
+          "min_questions": 3,
+          "required_questions": [
+            {
+              "id": "q_aom_duration",
+              "prompt_en": "How long has the ear pain been present?",
+              "prompt_ne": "कान दुख्न थालेको कति भयो?"
+            },
+            {
+              "id": "q_aom_discharge",
+              "prompt_en": "Discharge or pus from the ear?",
+              "prompt_ne": "कानबाट पिप वा रस आउँछ?"
+            },
+            {
+              "id": "q_aom_hearing",
+              "prompt_en": "Reduced hearing or ringing?",
+              "prompt_ne": "सुनाइ कम भएको वा कानमा आवाज आउने?"
+            },
+            {
+              "id": "q_aom_behind",
+              "prompt_en": "Swelling or pain behind the ear?",
+              "prompt_ne": "कान पछाडि सुन्निने वा दुख्ने?"
+            }
+          ]
+        }
+      },
+      "mandatory_red_flags": [
+        "rf_mastoiditis"
+      ],
+      "linked_regimens": [
+        "AOM-01",
+        "AOM-02"
+      ],
+      "linked_investigations": [
+        "INV_CBC"
+      ],
+      "keywords": [
+        "ear pain",
+        "ear discharge",
+        "ear infection",
+        "otitis",
+        "कान दुख",
+        "कान पाक",
+        "कानबाट पिप",
+        "कानबाट रस",
+        "सुनाइ कम"
+      ]
+    },
+    {
+      "condition_code": "COND_TINEA",
+      "display_name": "Tinea corporis / cruris (ringworm)",
+      "icd11_code": "1F28",
+      "cues": "दाद, गोलो चिलाउने दाग, काछमा चिलाउने",
+      "visit_types": {
+        "INITIAL": {
+          "min_questions": 3,
+          "required_questions": [
+            {
+              "id": "q_tinea_duration",
+              "prompt_en": "How long has the rash been present?",
+              "prompt_ne": "दाना/दाद देखिएको कति भयो?"
+            },
+            {
+              "id": "q_tinea_site",
+              "prompt_en": "Which body areas are affected?",
+              "prompt_ne": "शरीरको कुन भागमा छ?"
+            },
+            {
+              "id": "q_tinea_itch",
+              "prompt_en": "Itching, and is it spreading?",
+              "prompt_ne": "चिलाउँछ, फैलिँदै छ?"
+            },
+            {
+              "id": "q_tinea_steroid",
+              "prompt_en": "Any steroid cream or ointment applied?",
+              "prompt_ne": "स्टेरोइड क्रिम वा मलम लगाउनुभएको छ?"
+            }
+          ]
+        }
+      },
+      "mandatory_red_flags": [],
+      "linked_regimens": [
+        "TINEA-01",
+        "TINEA-02"
+      ],
+      "linked_investigations": [
+        "INV_CBC"
+      ],
+      "keywords": [
+        "ringworm",
+        "tinea",
+        "fungal",
+        "jock itch",
+        "दाद",
+        "गोलो चिलाउने",
+        "काछमा चिलाउने",
+        "चिलाउने दाग",
+        "छालामा दाग"
+      ]
+    },
+    {
+      "condition_code": "COND_SCABIES",
+      "display_name": "Scabies",
+      "icd11_code": "1G04",
+      "cues": "लुतो, राति चिलाउने, औंलाको कापमा बिमिरा",
+      "visit_types": {
+        "INITIAL": {
+          "min_questions": 3,
+          "required_questions": [
+            {
+              "id": "q_scab_itch",
+              "prompt_en": "Itching, worse at night?",
+              "prompt_ne": "चिलाउने, राति बढी?"
+            },
+            {
+              "id": "q_scab_sites",
+              "prompt_en": "Between fingers, wrists, waist, or genitals?",
+              "prompt_ne": "औंलाको काप, नाडी, कम्मर वा गुप्ताङ्गमा?"
+            },
+            {
+              "id": "q_scab_household",
+              "prompt_en": "Others at home with the same itching?",
+              "prompt_ne": "घरमा अरु कसैलाई पनि यस्तै चिलाउने छ?"
+            },
+            {
+              "id": "q_scab_duration",
+              "prompt_en": "How long has it been present?",
+              "prompt_ne": "कति भयो चिलाउन थालेको?"
+            },
+            {
+              "id": "q_scab_treated",
+              "prompt_en": "Any treatment already applied?",
+              "prompt_ne": "पहिले कुनै उपचार गर्नुभयो?"
+            }
+          ]
+        }
+      },
+      "mandatory_red_flags": [],
+      "linked_regimens": [
+        "SCAB-01",
+        "SCAB-02"
+      ],
+      "linked_investigations": [
+        "INV_CBC"
+      ],
+      "keywords": [
+        "scabies",
+        "itching at night",
+        "burrows",
+        "लुतो",
+        "राति चिलाउने",
+        "औंलाको काप",
+        "बिमिरा",
+        "सारा शरीर चिलाउने"
+      ]
+    },
+    {
+      "condition_code": "COND_GOUT",
+      "display_name": "Acute gouty arthritis",
+      "icd11_code": "FA25",
+      "cues": "युरिक एसिड, बुढी औंला सुन्निने, जोर्नी रातो र दुख्ने",
+      "visit_types": {
+        "INITIAL": {
+          "min_questions": 3,
+          "required_questions": [
+            {
+              "id": "q_gout_joint",
+              "prompt_en": "Which joint, and how quickly did it swell?",
+              "prompt_ne": "कुन जोर्नी, कति छिटो सुन्नियो?"
+            },
+            {
+              "id": "q_gout_onset",
+              "prompt_en": "Sudden onset, worst pain in first 24 hours?",
+              "prompt_ne": "अचानक सुरु भई पहिलो २४ घण्टामै धेरै दुख्यो?"
+            },
+            {
+              "id": "q_gout_fever",
+              "prompt_en": "Fever or chills with the joint pain?",
+              "prompt_ne": "जोर्नी दुखाइसँगै ज्वरो वा जाडो?"
+            },
+            {
+              "id": "q_gout_history",
+              "prompt_en": "Previous attacks, alcohol, or purine-rich diet?",
+              "prompt_ne": "पहिले पनि भएको थियो, मदिरा वा प्युरिनयुक्त खाना?"
+            },
+            {
+              "id": "q_gout_meds",
+              "prompt_en": "Any diuretic or current medicine?",
+              "prompt_ne": "पिसाब लगाउने औषधि वा अरु औषधि खाइरहनुभएको छ?"
+            }
+          ]
+        }
+      },
+      "mandatory_red_flags": [
+        "rf_septic_joint"
+      ],
+      "linked_regimens": [
+        "GOUT-01",
+        "GOUT-02"
+      ],
+      "linked_investigations": [
+        "INV_CBC",
+        "INV_RFT"
+      ],
+      "keywords": [
+        "gout",
+        "uric acid",
+        "big toe swelling",
+        "joint pain",
+        "युरिक एसिड",
+        "बुढी औंला",
+        "जोर्नी दुख",
+        "जोर्नी सुन्नि",
+        "जोर्नी रातो",
+        "युरेट"
+      ]
+    },
+    {
+      "condition_code": "COND_URI",
+      "display_name": "Viral upper respiratory infection (common cold)",
+      "icd11_code": "CA00",
+      "cues": "रुघा, नाक बन्द, घाँटी दुख्ने, हल्का ज्वरो",
+      "visit_types": {
+        "INITIAL": {
+          "min_questions": 2,
+          "required_questions": [
+            {
+              "id": "q_uri_duration",
+              "prompt_en": "How many days of runny/blocked nose?",
+              "prompt_ne": "नाक बग्ने/बन्द भएको कति दिन भयो?"
+            },
+            {
+              "id": "q_uri_fever",
+              "prompt_en": "Fever and how high?",
+              "prompt_ne": "ज्वरो आएको छ, कति?"
+            },
+            {
+              "id": "q_uri_breath",
+              "prompt_en": "Any breathlessness or chest tightness?",
+              "prompt_ne": "सास फेर्न गाह्रो वा छाती कस्सिने छ?"
+            }
+          ]
+        }
+      },
+      "mandatory_red_flags": [],
+      "linked_regimens": [
+        "URI-01",
+        "URI-02"
+      ],
+      "linked_investigations": [
+        "INV_CBC"
+      ],
+      "keywords": [
+        "common cold",
+        "runny nose",
+        "blocked nose",
+        "upper respiratory",
+        "रुघा",
+        "रुघाखोकी",
+        "नाक बन्द",
+        "नाक बग",
+        "हल्का ज्वरो",
+        "घाँटी दुख"
+      ]
     }
   ]
 }

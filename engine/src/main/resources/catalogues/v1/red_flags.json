@@ -502,6 +502,60 @@
         "कम्मरको छेउ",
         "कामेर ज्वरो"
       ]
+    },
+    {
+      "id": "rf_stridor_airway",
+      "kind": "RED_FLAG",
+      "label": "Stridor / noisy breathing at rest (airway compromise)",
+      "label_ne": "सास फेर्दा सिट्टी बज्ने / घाँटी बन्द हुने",
+      "cue": "Stridor, drooling, unable to swallow saliva, muffled voice",
+      "session_level": "EMERGENCY",
+      "disposition": "EMERGENCY_TRANSFER",
+      "keywords": [
+        "stridor",
+        "noisy breathing",
+        "drooling",
+        "cannot swallow",
+        "muffled voice",
+        "सास फेर्दा आवाज",
+        "घाँटी बन्द",
+        "थुक निल्न नसक्ने",
+        "स्वर बस्ने"
+      ]
+    },
+    {
+      "id": "rf_mastoiditis",
+      "kind": "RED_FLAG",
+      "label": "Swelling or redness behind the ear (mastoiditis)",
+      "label_ne": "कान पछाडि सुन्निने वा रातो हुने",
+      "cue": "Postauricular swelling, tenderness, ear pushed forward",
+      "session_level": "URGENT",
+      "disposition": "REFERRAL",
+      "keywords": [
+        "behind the ear swelling",
+        "mastoid",
+        "swollen behind ear",
+        "कान पछाडि सुन्निने",
+        "कान पछाडि रातो",
+        "कानको पछाडि दुख्ने"
+      ]
+    },
+    {
+      "id": "rf_septic_joint",
+      "kind": "RED_FLAG",
+      "label": "Single hot swollen joint with fever (possible septic arthritis)",
+      "label_ne": "एउटै जोर्नी रातो, सुन्निएको र ज्वरो सँगै",
+      "cue": "Fever plus one hot, swollen, very painful joint",
+      "session_level": "URGENT",
+      "disposition": "STAT_INVESTIGATE",
+      "keywords": [
+        "hot swollen joint",
+        "septic joint",
+        "joint with fever",
+        "जोर्नी सुन्निएर ज्वरो",
+        "जोर्नी रातो र ज्वरो",
+        "एक जोर्नी सुन्निने"
+      ]
     }
   ]
 }

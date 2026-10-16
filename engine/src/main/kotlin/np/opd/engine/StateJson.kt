@@ -8,9 +8,6 @@ package np.opd.engine
  * here is round-trip lossless: `CaseState.fromJ(state.toJ()) == state`.
  */
 
-private inline fun <reified T : Enum<T>> safeEnum(raw: String, fallback: T): T =
-    try { enumValueOf<T>(raw) } catch (_: IllegalArgumentException) { fallback }
-
 /* ============================== CaseState ============================== */
 
 fun CaseState.toJ(): J.Obj = J.obj(

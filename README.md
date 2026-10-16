@@ -18,8 +18,9 @@ Every time code changes, GitHub builds the app automatically (about 5–10 minut
 2. Go to this repository → **Releases** (right side of the page, or `…/opd-assistant/releases`).
 3. Open the newest **Test build N** and tap the file `opd-assistant-build-N.apk` to download it.
 4. Open the downloaded file. If Android asks, allow **"Install unknown apps"** for your browser, then tap **Install**.
-5. Later debug builds install over the old one using Android's standard debug signing. Release
-   signing keys are never stored in this repository.
+5. These test APKs use the build runner's standard debug signing. If Android reports a signature
+   mismatch, uninstall the previous prototype before installing the new build. Release signing keys
+   are never stored in this repository.
 
 If the newest build is missing, open the **Actions** tab: a red ✗ means the build failed (tell OmniRush.ai and paste the error).
 

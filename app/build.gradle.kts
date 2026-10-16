@@ -110,4 +110,6 @@ dependencies {
 
     // Apache Commons Compress for tar.bz2 extraction
     implementation("org.apache.commons:commons-compress:1.26.1")
+
+    testImplementation("junit:junit:4.13.2")
 }

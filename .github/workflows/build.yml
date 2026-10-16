@@ -37,6 +37,9 @@ jobs:
       - name: Safety engine tests (build stops if any fail)
         run: ./gradlew :engine:test --no-daemon --stacktrace
 
+      - name: App governance unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
       - name: Build APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 

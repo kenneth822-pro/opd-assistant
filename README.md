@@ -18,7 +18,8 @@ Every time code changes, GitHub builds the app automatically (about 5–10 minut
 2. Go to this repository → **Releases** (right side of the page, or `…/opd-assistant/releases`).
 3. Open the newest **Test build N** and tap the file `opd-assistant-build-N.apk` to download it.
 4. Open the downloaded file. If Android asks, allow **"Install unknown apps"** for your browser, then tap **Install**.
-5. Later builds install over the old one (same test signing key), so your settings are kept.
+5. Later debug builds install over the old one using Android's standard debug signing. Release
+   signing keys are never stored in this repository.
 
 If the newest build is missing, open the **Actions** tab: a red ✗ means the build failed (tell OmniRush.ai and paste the error).
 
@@ -60,6 +61,24 @@ The app also adapts to models with restrictions: if a model refuses system ("dev
 
 Tap **Test selected models** to check all three. Keys are encrypted on the phone with the Android Keystore; requests go directly from the phone to the provider.
 
+### Privacy and governance gates
+
+- The bundled catalogue is marked `SIMULATION_ONLY` and `UNVERIFIED`. There is no real-patient or
+  clinician-approved mode in this build, and sharing/printing is disabled even after a doctor
+  confirms a document.
+- Before recording, Settings requires a local consent record. Choose either **external AI allowed**
+  or **on-device AI only**; the app blocks a provider that does not match the selected path.
+- Text prompts sent to external providers redact common names, phone numbers and email addresses by
+  default. Audio cannot be redacted, so external audio processing requires explicit consent.
+- Raw provider responses are hidden unless Developer mode is enabled. Keep Developer mode off for
+  ordinary simulated consultations.
+- Choose an audio retention policy in Settings. Audio can be deleted after transcription, after the
+  consultation, immediately after processing, or automatically after a short period. **Delete all
+  recorded audio now** is always available.
+- Custom servers must use HTTPS by default. The application-level HTTP option is restricted to
+  explicit private/LAN opt-in; the Android network security configuration remains cleartext-blocked,
+  so HTTPS is required for a working custom server in this build.
+
 ## 3. Run a test consultation
 
 1. **New consultation** → **Live assist** (help while you talk) or **Scribe only** (fewer requests).
@@ -74,7 +93,7 @@ Tap **Test selected models** to check all three. Keys are encrypted on the phone
    - **Live transcript** — doctor / patient / attendant lines in colour, a "listening…" line and parts being written down.
 5. **💡 Suggest** cuts the current audio and updates suggestions straight away. **⏸ Pause** does the same and shows a "Paused" summary: what to ask next and the likely prescription so far.
 6. **■ End** → the last audio is transcribed, failed parts are retried, and the notes model writes the final note from the full transcript. If the AI note fails, a **note built on the phone** from everything captured is shown instead (never an empty note), with **Try AI note again**.
-7. On **Review** you can settle conflicts, confirm pregnancy status, enter vitals, mark questions asked, clear red flags (with a reason), override an escalation, accept/dismiss medicines, and **Share** the slip as text.
+7. On **Review** you can settle conflicts, confirm pregnancy status, enter vitals, mark questions asked, clear red flags (with a reason), override an escalation, accept/dismiss medicines, and inspect the governance metadata. Sharing is intentionally blocked while the catalogue is unverified.
 
 Tips: say vitals aloud ("BP 150 by 95, SpO2 96"), say exam findings aloud, and say "अब औषधि लेखिदिन्छु" when moving to treatment.
 
@@ -121,15 +140,17 @@ Key safety rules (all enforced in code and covered by tests):
 | `engine/src/test/kotlin/` | 62 tests incl. catalogue integrity, keyword hints with Nepali negation, adult-only dosing guards, persistence round-trips, and a randomized "AI can never loosen safety" check. |
 | `app/` | Android app (Kotlin + Jetpack Compose). |
 | `.github/workflows/build.yml` | Runs the tests, builds the APK, publishes it as a Release. |
-| `keystore/testing.jks` | **Test-only** signing key so updates install over each other. Never use for a published app. |
+| `app/src/main/res/xml/network_security_config.xml` | Cleartext-blocked Android network policy; HTTPS is the default. |
 
 ## 6. Known limitations of this prototype
 
 - The foreground recording service keeps the microphone alive in the background, but Android may
   still revoke microphone access or kill the process; the app reports a dead recorder and offers a
   restart attempt. Verify this on the target phone.
-- No patient records are saved; starting a new consultation deletes the previous audio.
-- No PDF / thermal printing yet (Share as text only).
+- Consultation snapshots and configured retention metadata are stored locally; audio cleanup is
+  policy-driven and can be forced from Settings. Do not treat the local snapshot as a patient record.
+- No PDF / thermal printing yet. Text sharing is implemented but blocked until catalogue approval
+  evidence and doctor sign-off exist.
 - Speaker labels come from the AI and can be wrong (Whisper gives none; the notes model infers them).
 - Free model tiers have daily limits; a 10-minute live consultation uses roughly 40-80 requests.
 - The catalogue covers 20 adult OPD conditions. Children, pregnancy-specific care and emergencies are out of scope; age is now required before a protocol regimen can be suggested.
@@ -155,3 +176,7 @@ GNU Make, run the equivalent wrapper commands directly:
 ```
 
 Open the folder in Android Studio to work on the app. The engine can be edited in any IDE.
+
+Release signing, when needed, is supplied through CI-only environment variables:
+`OPD_RELEASE_STORE_FILE`, `OPD_RELEASE_STORE_PASSWORD`, `OPD_RELEASE_KEY_ALIAS`, and
+`OPD_RELEASE_KEY_PASSWORD`. Never commit the keystore or these values.

@@ -8,6 +8,9 @@ package np.opd.engine
  * here is round-trip lossless: `CaseState.fromJ(state.toJ()) == state`.
  */
 
+private inline fun <reified T : Enum<T>> safeEnum(raw: String, fallback: T): T =
+    try { enumValueOf<T>(raw) } catch (_: IllegalArgumentException) { fallback }
+
 /* ============================== CaseState ============================== */
 
 fun CaseState.toJ(): J.Obj = J.obj(
@@ -31,6 +34,7 @@ fun CaseState.toJ(): J.Obj = J.obj(
     "sessionLevel" to sessionLevel.name,
     "sessionAlerts" to sessionAlerts,
     "pregnancyCheckNeeded" to pregnancyCheckNeeded,
+    "review" to review.toJ(),
     "counter" to counter,
     "audit" to audit
 )
@@ -56,6 +60,7 @@ internal fun caseStateFromJ(o: J.Obj): CaseState = CaseState(
     sessionLevel = o.str("sessionLevel")?.let { safeEnum(it, SessionLevel.INFO) } ?: SessionLevel.INFO,
     sessionAlerts = o.strs("sessionAlerts"),
     pregnancyCheckNeeded = o.bool("pregnancyCheckNeeded") ?: false,
+    review = o.obj("review")?.let { doctorReviewFromJ(it) } ?: DoctorReview(),
     counter = o.int("counter") ?: 0,
     audit = o.strs("audit")
 )
@@ -219,6 +224,22 @@ private fun transcriptLineFromJ(o: J.Obj): TranscriptLine = TranscriptLine(o.str
 
 fun AiQuestion.toJ(): J.Obj = J.obj("ne" to ne, "en" to en, "reason" to reason)
 private fun aiQuestionFromJ(o: J.Obj): AiQuestion = AiQuestion(o.strOr("ne", ""), o.strOr("en", ""), o.strOr("reason", ""))
+
+fun DoctorReview.toJ(): J.Obj = J.obj(
+    "status" to status.name,
+    "timestampMs" to timestampMs,
+    "doctorIdentity" to doctorIdentity,
+    "catalogueVersion" to catalogueVersion,
+    "modelMetadata" to modelMetadata
+)
+
+private fun doctorReviewFromJ(o: J.Obj): DoctorReview = DoctorReview(
+    status = o.str("status")?.let { safeEnum(it, ReviewStatus.AI_DRAFT) } ?: ReviewStatus.AI_DRAFT,
+    timestampMs = o.dbl("timestampMs")?.toLong(),
+    doctorIdentity = o.str("doctorIdentity"),
+    catalogueVersion = o.str("catalogueVersion"),
+    modelMetadata = o.str("modelMetadata")
+)
 
 /* ============================== SoapNote ============================== */
 

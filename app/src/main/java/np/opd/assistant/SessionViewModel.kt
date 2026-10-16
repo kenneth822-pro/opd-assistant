@@ -33,12 +33,14 @@ import np.opd.engine.CaseState
 import np.opd.engine.CatalogueIntegrity
 import np.opd.engine.Catalogues
 import np.opd.engine.DoctorAction
+import np.opd.engine.DoctorReview
 import np.opd.engine.Gender
 import np.opd.engine.J
 import np.opd.engine.LiveDelta
 import np.opd.engine.LocalAssist
 import np.opd.engine.Notes
 import np.opd.engine.Prompts
+import np.opd.engine.ReviewStatus
 import np.opd.engine.Reducer
 import np.opd.engine.TranscriptLine
 import np.opd.engine.toJ
@@ -105,7 +107,15 @@ data class UiState(
     val models: Map<Provider, List<ModelInfo>> = emptyMap(),
     val keys: Set<Provider> = emptySet(),
     val customBaseUrl: String = "",
-    val modelsBusy: String? = null
+    val allowInsecureLocalServer: Boolean = false,
+    val modelsBusy: String? = null,
+    val appMode: AppMode = AppMode.SIMULATION,
+    val consent: ConsentRecord = ConsentRecord(),
+    val audioRetentionPolicy: AudioRetentionPolicy = AudioRetentionPolicy.DELETE_AFTER_CONSULTATION,
+    val audioRetentionHours: Int = 24,
+    val developerMode: Boolean = false,
+    val privacySafePrompts: Boolean = true,
+    val doctorIdentity: String = ""
 ) {
     val notesModel: ModelInfo? get() = analysisModel ?: speechModel
     val pendingSegments: Int get() = segments.count { it.state == SegState.QUEUED || it.state == SegState.TRANSCRIBING }
@@ -183,6 +193,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         catalogueProblems = problems
         // Restore the last consultation snapshot (if any) so "Open last consultation" survives
         // a process kill or phone restart mid-consultation.
+        cleanupExpiredAudio()
         val restored = loadSessionSnapshot()
         val startScreen = when {
             !settings.disclaimerAccepted -> Screen.DISCLAIMER
@@ -204,13 +215,24 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun key(p: Provider): String = keyCache.getOrPut(p) { settings.keyFor(p) }
 
+    private fun privacySafeText(text: String): String =
+        if (settings.privacySafePrompts) PrivacySafeText.redact(text) else text
+
     private fun withSettings(s: UiState) = s.copy(
         speechModel = settings.speechModel,
         analysisModel = settings.analysisModel,
         backupModel = settings.backupModel,
         models = Provider.entries.associateWith { settings.models(it) },
         keys = Provider.entries.filter { key(it).isNotBlank() }.toSet(),
-        customBaseUrl = settings.customBaseUrl
+        customBaseUrl = settings.customBaseUrl,
+        allowInsecureLocalServer = settings.allowInsecureLocalServer,
+        appMode = GovernancePolicy.appMode(catalogues?.manifest?.approvalStatus),
+        consent = settings.consent,
+        audioRetentionPolicy = settings.audioRetentionPolicy,
+        audioRetentionHours = settings.audioRetentionHours,
+        developerMode = settings.developerMode,
+        privacySafePrompts = settings.privacySafePrompts,
+        doctorIdentity = settings.doctorIdentity
     )
 
     private fun refreshSettings() = _ui.update { withSettings(it) }
@@ -312,6 +334,56 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         refreshSettings()
     }
 
+    fun setAllowInsecureLocalServer(enabled: Boolean) {
+        settings.allowInsecureLocalServer = enabled
+        refreshSettings()
+    }
+
+    fun setConsent(externalAiAllowed: Boolean, localOnly: Boolean) {
+        if (externalAiAllowed == localOnly) {
+            showMessage("Choose either external AI or on-device AI for this consent record.")
+            return
+        }
+        settings.consent = ConsentRecord(
+            status = ConsentStatus.OBTAINED,
+            externalAiAllowed = externalAiAllowed,
+            localOnly = localOnly,
+            timestampMs = System.currentTimeMillis()
+        )
+        refreshSettings()
+        showMessage("Recording consent saved on this phone.")
+    }
+
+    fun withdrawConsent() {
+        settings.consent = ConsentRecord(status = ConsentStatus.WITHDRAWN, timestampMs = System.currentTimeMillis())
+        refreshSettings()
+        showMessage("Recording consent withdrawn. Start a new consent record before recording.")
+    }
+
+    fun setDoctorIdentity(identity: String) {
+        settings.doctorIdentity = identity
+        refreshSettings()
+    }
+
+    fun setAudioRetention(policy: AudioRetentionPolicy, hours: Int = settings.audioRetentionHours) {
+        settings.audioRetentionPolicy = policy
+        settings.audioRetentionHours = hours
+        cleanupExpiredAudio()
+        refreshSettings()
+    }
+
+    fun setDeveloperMode(enabled: Boolean) {
+        settings.developerMode = enabled
+        if (!enabled) settings.privacySafePrompts = true
+        refreshSettings()
+    }
+
+    fun setPrivacySafePrompts(enabled: Boolean) {
+        if (!settings.developerMode && !enabled) return
+        settings.privacySafePrompts = enabled
+        refreshSettings()
+    }
+
     fun loadModels(provider: Provider) {
         viewModelScope.launch {
             _ui.update { it.copy(modelsBusy = "Loading ${provider.label} models…", message = null) }
@@ -320,7 +392,12 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     Provider.GEMINI -> ModelDirectory.gemini(key(Provider.GEMINI))
                     Provider.OPENROUTER -> ModelDirectory.openRouter()
                     Provider.LOCAL_WHISPER, Provider.LOCAL_LLM -> ModelDirectory.localModels(getApplication<Application>())
-                    else -> ModelDirectory.openAiCompatible(provider, settings.baseUrlFor(provider), key(provider))
+                    else -> {
+                        if (provider == Provider.CUSTOM && !settings.customServerAllowed()) {
+                            throw ApiException("Use HTTPS, or explicitly enable the private/LAN HTTP opt-in in Settings.")
+                        }
+                        ModelDirectory.openAiCompatible(provider, settings.baseUrlFor(provider), key(provider))
+                    }
                 }
                 if (list.isEmpty()) {
                     showMessage("${provider.label} returned no usable models.")
@@ -388,6 +465,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             for ((role, m) in roles) {
                 val started = System.currentTimeMillis()
                 lines += try {
+                    missingAccess(m)?.let { throw ApiException(it) }
                     val client = clientFor(m, attempts = 2)
                     val reply = if (m.transcriptionApi) {
                         val heard = client.transcribe(silentWav(1000), "") ?: emptyList()
@@ -418,6 +496,31 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         showMessage("All recorded audio deleted from this phone.")
     }
 
+    private fun cleanupExpiredAudio() {
+        val root = File(getApplication<Application>().filesDir, "sessions")
+        if (!root.exists()) return
+        val cutoff = System.currentTimeMillis() - settings.audioRetentionHours * 60L * 60L * 1000L
+        root.walkTopDown().filter { it.isFile && it.lastModified() > 0L && it.lastModified() < cutoff }.forEach { it.delete() }
+        root.listFiles()?.filter { it.isDirectory && it.walkTopDown().none { child -> child.isFile } }?.forEach { it.deleteRecursively() }
+    }
+
+    private fun deleteProcessedAudio(seg: Segment) {
+        if (settings.audioRetentionPolicy == AudioRetentionPolicy.DELETE_AFTER_TRANSCRIPTION ||
+            settings.audioRetentionPolicy == AudioRetentionPolicy.DELETE_IMMEDIATELY
+        ) seg.file.delete()
+    }
+
+    private fun cleanupAudioAfterConsultation() {
+        when (settings.audioRetentionPolicy) {
+            AudioRetentionPolicy.DELETE_AFTER_CONSULTATION -> {
+                File(getApplication<Application>().filesDir, "sessions").deleteRecursively()
+            }
+            AudioRetentionPolicy.DELETE_AFTER_TRANSCRIPTION,
+            AudioRetentionPolicy.DELETE_IMMEDIATELY,
+            AudioRetentionPolicy.KEEP_FOR_SHORT_PERIOD -> cleanupExpiredAudio()
+        }
+    }
+
     private fun clientFor(m: ModelInfo, attempts: Int = 4, fast: Boolean = false): AiClient = when (m.provider) {
         Provider.GEMINI -> GeminiClient(key(Provider.GEMINI), m, attempts, fast)
         Provider.LOCAL_WHISPER -> {
@@ -437,6 +540,9 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun missingAccess(m: ModelInfo): String? = when {
         m.provider == Provider.CUSTOM && settings.customBaseUrl.isBlank() -> "Enter the custom server address in Settings."
+        m.provider == Provider.CUSTOM && !settings.customServerAllowed() -> "Custom server must use HTTPS, or the explicit private/LAN HTTP opt-in in Settings."
+        !m.provider.isLocal && !GovernancePolicy.externalAiAllowed(settings.consent) ->
+            "External AI is disabled until recording consent explicitly allows it. Choose an on-device model or update consent in Settings."
         m.provider.isLocal -> {
             val modelDir = localModels.getModelDir(m.id, if (m.provider == Provider.LOCAL_WHISPER) np.opd.assistant.model.ModelType.STT else np.opd.assistant.model.ModelType.LLM)
             if (modelDir == null || !modelDir.exists()) "Local model not downloaded: ${m.name}" else {
@@ -496,6 +602,9 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startConsult(mode: Mode, age: Int?, gender: Gender?, persona: ClinicalPersona = settings.persona) {
         val cat = catalogues ?: return showMessage("Clinical catalogues failed to load.")
+        if (settings.consent.status != ConsentStatus.OBTAINED) {
+            return showMessage("Recording consent is required before starting. Open Settings and save either external-AI or local-only consent.")
+        }
         val speech = settings.speechModel ?: return showMessage("Choose a speech model in Settings first.")
         if (!speech.audioInput && !speech.transcriptionApi) return showMessage("The speech model must accept audio. Choose another in Settings.")
         val notes = settings.analysisModel ?: speech
@@ -522,7 +631,19 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             else -> liveTranscriptPrompt
         }
 
-        var case = CaseState()
+        val metadata = GovernancePolicy.modelMetadata(
+            "speech=${speech.provider.name}:${speech.id}",
+            "notes=${notes.provider.name}:${notes.id}",
+            settings.backupModel?.let { "backup=${it.provider.name}:${it.id}" }
+        )
+        var case = CaseState(
+            review = DoctorReview(
+                status = ReviewStatus.AI_DRAFT,
+                timestampMs = System.currentTimeMillis(),
+                catalogueVersion = cat.version,
+                modelMetadata = metadata
+            )
+        )
         if (age != null || gender != null) case = Reducer.handle(case, DoctorAction.SetDemographics(age, gender), cat)
         val dir = File(getApplication<Application>().filesDir, "sessions/${case.sessionId}").apply { mkdirs() }
         val rec = WavSegmentRecorder(
@@ -657,7 +778,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             notes != null && notes.key == speech.key
         try {
             val wav = withContext(Dispatchers.IO) { seg.file.readBytes() }
-            val context = _ui.value.case.transcript.takeLast(6).joinToString("\n") { "${it.speaker}: ${it.text}" }
+            val context = privacySafeText(_ui.value.case.transcript.takeLast(6).joinToString("\n") { "${it.speaker}: ${it.text}" })
             if (fused) {
                 transcribeAndAnalyse(seg, speech, cat, wav)
             } else {
@@ -668,7 +789,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                         val raw = client.generate(
                             transcribePrompt,
                             listOf(
-                                AiPart.Text("Previous lines, for speaker context only (do not repeat them):\n${context.ifBlank { "(start of consultation)" }}\n\nTranscribe audio segment #${seg.number}."),
+                                 AiPart.Text(privacySafeText("Previous lines, for speaker context only (do not repeat them):\n${context.ifBlank { "(start of consultation)" }}\n\nTranscribe audio segment #${seg.number}.")),
                                 AiPart.Wav(wav)
                             ),
                             transcribeSchema
@@ -680,9 +801,10 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                 _ui.update { st ->
                     st.copy(
                         case = dictationize(Reducer.reduce(st.case, LiveDelta(transcript = lines), cat, seg.startMs)),
-                        aiLog = (st.aiLog + "Transcript ${seg.number} (${used.id}):\n$raw").takeLast(40)
+                        aiLog = if (settings.developerMode) (st.aiLog + "Transcript ${seg.number} (${used.id}):\n$raw").takeLast(40) else st.aiLog
                     )
                 }
+                deleteProcessedAudio(seg)
                 setSeg(seg.number) { it.copy(state = SegState.DONE, model = used.id, lines = lines.size, error = null) }
                 saveSessionSnapshot()
                 if (lines.isNotEmpty()) refreshHints()
@@ -706,9 +828,9 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         val st0 = _ui.value
         val earlier = st0.case.transcript.filter { it in analyzed }.takeLast(8)
         val prompt = buildString {
-            append(Prompts.caseSummary(st0.case, cat, recentLines = 0))
-            hintText(st0.hints)?.let { append("\n").append(it).append("\n") }
-            if (earlier.isNotEmpty()) append("\nEARLIER LINES (context only, already processed):\n").append(Prompts.transcriptText(earlier)).append("\n")
+            append(privacySafeText(Prompts.caseSummary(st0.case, cat, recentLines = 0)))
+            hintText(st0.hints)?.let { append("\n").append(privacySafeText(it)).append("\n") }
+            if (earlier.isNotEmpty()) append("\nEARLIER LINES (context only, already processed):\n").append(privacySafeText(Prompts.transcriptText(earlier))).append("\n")
             append("\nNEW AUDIO SEGMENT #${seg.number}. Transcribe it AND report the clinical delta in one JSON object.")
         }
         val (result, used) = withFallback(model, Need.AUDIO, live = true) { client ->
@@ -733,9 +855,10 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                 heard = st.heard + heardFields(st.case, c),
                 analysing = false,
                 analysisFailed = false,
-                aiLog = (st.aiLog + "Fused ${seg.number} (${used.id}):\n$raw").takeLast(40)
+                aiLog = if (settings.developerMode) (st.aiLog + "Fused ${seg.number} (${used.id}):\n$raw").takeLast(40) else st.aiLog
             )
         }
+        deleteProcessedAudio(seg)
         setSeg(seg.number) { it.copy(state = SegState.DONE, model = used.id, lines = rawLines.size, error = null) }
         lastAnalysisAt = System.currentTimeMillis()
         saveSessionSnapshot()
@@ -800,11 +923,11 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         }
         val earlier = st.case.transcript.filter { it in analyzed }.takeLast(8)
         val prompt = buildString {
-            append(Prompts.caseSummary(st.case, cat, recentLines = 0))
-            hintText(st.hints)?.let { append("\n").append(it).append("\n") }
-            if (earlier.isNotEmpty()) append("\nEARLIER LINES (context only, already processed):\n").append(Prompts.transcriptText(earlier)).append("\n")
+            append(privacySafeText(Prompts.caseSummary(st.case, cat, recentLines = 0)))
+            hintText(st.hints)?.let { append("\n").append(privacySafeText(it)).append("\n") }
+            if (earlier.isNotEmpty()) append("\nEARLIER LINES (context only, already processed):\n").append(privacySafeText(Prompts.transcriptText(earlier))).append("\n")
             if (fresh.isEmpty()) append("\nNEW TRANSCRIPT: (nothing new; the consultation is paused). Return empty arrays except next_questions: what should the doctor ask next given the case so far?")
-            else append("\nNEW TRANSCRIPT (report what is new here):\n").append(Prompts.transcriptText(fresh))
+            else append("\nNEW TRANSCRIPT (report what is new here):\n").append(privacySafeText(Prompts.transcriptText(fresh)))
         }
         _ui.update { it.copy(analysing = true) }
         try {
@@ -823,7 +946,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     analysing = false,
                     analysisFailed = false,
                     analysisNote = "Suggestions updated at ${clock(s.elapsedSec)}" + if (used.key != model.key) " (backup ${used.id})" else "",
-                    aiLog = (s.aiLog + "Analysis (${used.id}):\n$raw").takeLast(40)
+                    aiLog = if (settings.developerMode) (s.aiLog + "Analysis (${used.id}):\n$raw").takeLast(40) else s.aiLog
                 )
             }
             saveSessionSnapshot()
@@ -860,6 +983,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                 failed.forEach { transcribeSegment(it) }
             }
             runFinal()
+            cleanupAudioAfterConsultation()
         }
     }
 
@@ -912,7 +1036,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             val (result, used) = withFallback(model, Need.TEXT, live = false) { client ->
                 val raw = client.generate(
                     finalPrompt,
-                    listOf(AiPart.Text(Prompts.caseSummary(_ui.value.case, cat, recentLines = 0) + "\n\nFULL TRANSCRIPT:\n" + Prompts.transcriptText(transcript))),
+                    listOf(AiPart.Text(privacySafeText(Prompts.caseSummary(_ui.value.case, cat, recentLines = 0) + "\n\nFULL TRANSCRIPT:\n" + Prompts.transcriptText(transcript)))),
                     finalSchema
                 )
                 Prompts.parseFinal(raw) to raw
@@ -927,7 +1051,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                     busy = null,
                     screen = Screen.REVIEW,
                     finalFailed = false,
-                    aiLog = (it.aiLog + "Final (${used.id}):\n$raw").takeLast(40)
+                    aiLog = if (settings.developerMode) (it.aiLog + "Final (${used.id}):\n$raw").takeLast(40) else it.aiLog
                 )
             }
             saveSessionSnapshot()
@@ -950,7 +1074,15 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                 is DoctorAction.SettleConflict -> it.heard - action.field
                 else -> it.heard
             }
-            it.copy(case = Reducer.handle(it.case, action, cat), heard = heard)
+            val reduced = Reducer.handle(it.case, action, cat)
+            val review = if (action is DoctorAction.SetReviewStatus) reduced.review else {
+                reduced.review.copy(
+                    status = ReviewStatus.DOCTOR_REVIEW_REQUIRED,
+                    timestampMs = System.currentTimeMillis(),
+                    doctorIdentity = settings.doctorIdentity.takeIf { value -> value.isNotBlank() }
+                )
+            }
+            it.copy(case = reduced.copy(review = review), heard = heard)
         }
         saveSessionSnapshot()
     }
@@ -959,7 +1091,49 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Lets the doctor correct the SOAP note before sharing the slip. */
     fun updateSoap(soap: Prompts.SoapNote) {
-        _ui.update { it.copy(soap = soap) }
+        _ui.update {
+            it.copy(
+                soap = soap,
+                case = it.case.copy(
+                    review = it.case.review.copy(
+                        status = ReviewStatus.DOCTOR_REVIEW_REQUIRED,
+                        timestampMs = System.currentTimeMillis(),
+                        doctorIdentity = settings.doctorIdentity.takeIf { value -> value.isNotBlank() }
+                    )
+                )
+            )
+        }
+        saveSessionSnapshot()
+    }
+
+    fun confirmDocument() {
+        val cat = catalogues ?: return
+        val identity = settings.doctorIdentity.trim()
+        if (identity.isBlank()) return showMessage("Add a clinician identity in Settings before confirming this document.")
+        _ui.update { st ->
+            st.copy(case = st.case.copy(review = st.case.review.copy(
+                status = ReviewStatus.DOCTOR_CONFIRMED,
+                timestampMs = System.currentTimeMillis(),
+                doctorIdentity = identity,
+                catalogueVersion = cat.version,
+                modelMetadata = st.case.review.modelMetadata ?: GovernancePolicy.modelMetadata(
+                    "speech=${st.speechModel?.provider?.name}:${st.speechModel?.id}",
+                    "notes=${st.notesModel?.provider?.name}:${st.notesModel?.id}"
+                )
+            )))
+        }
+        saveSessionSnapshot()
+        showMessage("Document confirmed by $identity. Sharing remains disabled while the catalogue is not clinician-approved.")
+    }
+
+    fun voidDocument() {
+        _ui.update { st ->
+            st.copy(case = st.case.copy(review = st.case.review.copy(
+                status = ReviewStatus.VOIDED,
+                timestampMs = System.currentTimeMillis(),
+                doctorIdentity = settings.doctorIdentity.takeIf { it.isNotBlank() }
+            )))
+        }
         saveSessionSnapshot()
     }
 

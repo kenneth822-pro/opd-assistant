@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import np.opd.assistant.ClinicalPersona
+import np.opd.assistant.ConsentStatus
+import np.opd.assistant.GovernancePolicy
 import np.opd.assistant.Mode
 import np.opd.assistant.RxText
 import np.opd.assistant.Screen
@@ -63,6 +65,7 @@ import np.opd.engine.Phase
 import np.opd.engine.Pregnancy
 import np.opd.engine.Problem
 import np.opd.engine.RegimenDef
+import np.opd.engine.ReviewStatus
 import np.opd.engine.Severity
 import np.opd.engine.Sig
 import np.opd.engine.TranscriptLine
@@ -172,10 +175,19 @@ private fun SetupScreen(st: UiState, vm: SessionViewModel) {
     BackHandler { vm.go(Screen.HOME) }
     Page("New consultation", onBack = { vm.go(Screen.HOME) }) {
         SectionCard("Mode") {
+            SectionCard("Simulation-only safeguard", container = Palette.urgentBg) {
+                Text("The bundled catalogue is unverified. This consultation is simulation/test data only; clinical-approved mode is not available in this build.")
+            }
             ModeOption("Live assist", "Live transcript, what to ask next, red flags to rule out and the likely prescription while you talk.", mode == Mode.LIVE) { mode = Mode.LIVE }
             ModeOption("Scribe only", "Live transcript only. The note and suggestions are produced when you end the consultation (fewer requests).", mode == Mode.SCRIBE) { mode = Mode.SCRIBE }
             ModeOption("Classification / Triage", "Fast classification: condition code, severity and red flags with a disposition — no verbose note while you talk.", mode == Mode.TRIAGE) { mode = Mode.TRIAGE }
             ModeOption("Direct dictation", "The doctor dictates findings and the prescription. Focus on formulary matching and drug-safety checks.", mode == Mode.DICTATION) { mode = Mode.DICTATION }
+        }
+        if (st.consent.status != ConsentStatus.OBTAINED) {
+            SectionCard("Recording consent required", container = Palette.urgentBg) {
+                Text("Save a participant consent record in Settings before requesting microphone access. Choose external-AI or on-device-only processing.")
+                OutlinedButton(onClick = { vm.go(Screen.SETTINGS) }) { Text("Open privacy settings") }
+            }
         }
         SectionCard("Clinical focus") {
             Row(
@@ -216,6 +228,7 @@ private fun SetupScreen(st: UiState, vm: SessionViewModel) {
                 }
                 if (needed.isEmpty()) start() else launcher.launch(needed.toTypedArray())
             },
+            enabled = st.consent.status == ConsentStatus.OBTAINED,
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) { Text("Start recording", fontSize = 18.sp) }
         Muted("Keep this app open on screen while recording. The screen will stay on.")
@@ -265,6 +278,20 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
     Page("Review", onBack = { vm.go(Screen.HOME) }) {
         st.busy?.let {
             SectionCard("Please wait") { Text(it); LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
+        }
+        SectionCard("Document governance", container = Palette.urgentBg) {
+            Text("Catalogue: ${cat.manifest.approvalStatus?.name ?: "UNKNOWN"} · version ${cat.version}", fontWeight = FontWeight.SemiBold)
+            Text("Document status: ${s.review.status.name.lowercase().replace('_', ' ')}")
+            s.review.doctorIdentity?.takeIf { it.isNotBlank() }?.let { Text("Clinician: $it") }
+            s.review.modelMetadata?.takeIf { it.isNotBlank() }?.let { Text("Models: $it", fontSize = 11.sp) }
+            Text("This build remains simulation-only; clinician confirmation does not make the unverified catalogue a valid prescription.")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { vm.confirmDocument() },
+                    enabled = st.busy == null && s.review.status != ReviewStatus.SIGNED && s.review.status != ReviewStatus.VOIDED
+                ) { Text("Doctor confirmed") }
+                OutlinedButton(onClick = { vm.voidDocument() }, enabled = st.busy == null) { Text("Void") }
+            }
         }
         Banner(s.sessionAlerts, s.sessionLevel)
         if (st.finalFailed) {
@@ -383,15 +410,22 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
 
         // ---------- Slip ----------
         val slip = RxText.build(s, st.soap, cat)
+        val shareAllowed = GovernancePolicy.canShare(cat.manifest.approvalStatus, s.review)
+        val shareBlockReason = GovernancePolicy.shareBlockReason(cat.manifest.approvalStatus, s.review)
         SectionCard("Prescription slip (preview)") {
             Text(slip, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-            Button(onClick = {
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, slip)
-                }
-                context.startActivity(Intent.createChooser(send, "Share slip"))
-            }) { Text("Share") }
+            if (shareAllowed) {
+                Button(onClick = {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, slip)
+                    }
+                    context.startActivity(Intent.createChooser(send, "Share slip"))
+                }) { Text("Share") }
+            } else {
+                Text(shareBlockReason, color = Palette.urgentFg, fontWeight = FontWeight.SemiBold)
+                Muted("Sharing and printing stay disabled until catalogue approval evidence and doctor sign-off are both present.")
+            }
         }
 
         // ---------- Technical ----------
@@ -406,7 +440,11 @@ private fun ReviewScreen(st: UiState, vm: SessionViewModel) {
             }
             SectionCard("Audit log") { s.audit.takeLast(80).forEach { Text(it, fontSize = 11.sp, fontFamily = FontFamily.Monospace) } }
             SectionCard("Errors") { if (st.errors.isEmpty()) Muted("none") else st.errors.forEach { Muted(it) } }
-            SectionCard("Raw AI responses") { st.aiLog.takeLast(12).forEach { Text(it.take(3000), fontSize = 10.sp, fontFamily = FontFamily.Monospace) } }
+            if (st.developerMode) {
+                SectionCard("Raw AI responses") { st.aiLog.takeLast(12).forEach { Text(it.take(3000), fontSize = 10.sp, fontFamily = FontFamily.Monospace) } }
+            } else {
+                SectionCard("Raw AI responses") { Muted("Hidden. Enable developer mode in Settings to view raw provider responses.") }
+            }
         }
         Button(onClick = { vm.newConsultation() }, enabled = st.busy == null, modifier = Modifier.fillMaxWidth()) { Text("New consultation") }
         Spacer(Modifier.height(24.dp))

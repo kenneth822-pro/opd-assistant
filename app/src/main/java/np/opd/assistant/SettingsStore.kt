@@ -8,6 +8,7 @@ import np.opd.assistant.ai.ModelInfo
 import np.opd.assistant.ai.Provider
 import np.opd.engine.J
 import java.security.KeyStore
+import java.net.URI
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -53,6 +54,8 @@ class SettingsStore(context: Context) {
         else -> p.defaultBaseUrl ?: ""
     }
 
+    fun customServerAllowed(): Boolean = isAllowedServerUrl(customBaseUrl, allowInsecureLocalServer)
+
     /** Model that listens to the audio (must accept audio, or be a speech-to-text model). */
     var speechModel: ModelInfo?
         get() = readModel("speech_model")
@@ -95,6 +98,54 @@ class SettingsStore(context: Context) {
             ClinicalPersona.GENERAL_OPD
         }
         set(value) = prefs.edit().putString("persona", value.name).apply()
+
+    var consent: ConsentRecord
+        get() = try {
+            ConsentRecord(
+                status = ConsentStatus.valueOf(prefs.getString("consent_status", ConsentStatus.NOT_REQUESTED.name)!!),
+                externalAiAllowed = prefs.getBoolean("consent_external_ai", false),
+                localOnly = prefs.getBoolean("consent_local_only", false),
+                timestampMs = prefs.getLong("consent_timestamp", 0L).takeIf { it > 0L }
+            )
+        } catch (_: Exception) {
+            ConsentRecord()
+        }
+        set(value) = prefs.edit()
+            .putString("consent_status", value.status.name)
+            .putBoolean("consent_external_ai", value.externalAiAllowed && !value.localOnly)
+            .putBoolean("consent_local_only", value.localOnly && !value.externalAiAllowed)
+            .putLong("consent_timestamp", value.timestampMs ?: 0L)
+            .apply()
+
+    var doctorIdentity: String
+        get() = prefs.getString("doctor_identity", "")?.trim().orEmpty()
+        set(value) = prefs.edit().putString("doctor_identity", value.trim().take(120)).apply()
+
+    var audioRetentionPolicy: AudioRetentionPolicy
+        get() = try {
+            AudioRetentionPolicy.valueOf(prefs.getString("audio_retention", AudioRetentionPolicy.DELETE_AFTER_CONSULTATION.name)!!)
+        } catch (_: Exception) {
+            AudioRetentionPolicy.DELETE_AFTER_CONSULTATION
+        }
+        set(value) = prefs.edit().putString("audio_retention", value.name).apply()
+
+    var audioRetentionHours: Int
+        get() = prefs.getInt("audio_retention_hours", 24).coerceIn(1, 72)
+        set(value) = prefs.edit().putInt("audio_retention_hours", value.coerceIn(1, 72)).apply()
+
+    var developerMode: Boolean
+        get() = prefs.getBoolean("developer_mode", false)
+        set(value) = prefs.edit().putBoolean("developer_mode", value).apply()
+
+    /** Enabled by default: identifiers are removed from text prompts before external requests. */
+    var privacySafePrompts: Boolean
+        get() = prefs.getBoolean("privacy_safe_prompts", true)
+        set(value) = prefs.edit().putBoolean("privacy_safe_prompts", value).apply()
+
+    /** Explicit opt-in required for HTTP custom servers. HTTPS remains the default. */
+    var allowInsecureLocalServer: Boolean
+        get() = prefs.getBoolean("allow_insecure_local_server", false)
+        set(value) = prefs.edit().putBoolean("allow_insecure_local_server", value).apply()
 
     private fun readModel(key: String): ModelInfo? = try {
         prefs.getString(key, null)?.let { (J.parse(it) as? J.Obj)?.let(ModelInfo::fromJ) }
@@ -156,6 +207,18 @@ class SettingsStore(context: Context) {
             u = u.trimEnd('/')
             if (!u.endsWith("/v1")) u += "/v1"
             return u
+        }
+
+        /** HTTPS is always allowed; cleartext is restricted to an explicit private/LAN opt-in. */
+        fun isAllowedServerUrl(raw: String, allowInsecureLocalServer: Boolean): Boolean {
+            val uri = try { URI(raw.trim()) } catch (_: Exception) { return false }
+            val scheme = uri.scheme?.lowercase() ?: return false
+            if (scheme == "https") return true
+            if (scheme != "http" || !allowInsecureLocalServer) return false
+            val host = uri.host?.lowercase() ?: return false
+            return host == "localhost" || host == "127.0.0.1" || host == "::1" ||
+                host.startsWith("10.") || host.startsWith("192.168.") ||
+                host.startsWith("172.") && host.split('.').getOrNull(1)?.toIntOrNull()?.let { it in 16..31 } == true
         }
     }
 }

@@ -46,6 +46,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import np.opd.assistant.Screen
 import np.opd.assistant.SessionViewModel
 import np.opd.assistant.UiState
+import np.opd.assistant.AudioRetentionPolicy
+import np.opd.assistant.ConsentStatus
 import np.opd.assistant.ai.ModelInfo
 import np.opd.assistant.ai.Provider
 import np.opd.assistant.model.AvailableLlmModels
@@ -72,6 +74,10 @@ private fun limitsNote(p: Provider): String = when (p) {
 @Composable
 internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
     var seconds by remember { mutableStateOf(vm.settings.segmentSeconds.toString()) }
+    var consentExternal by remember { mutableStateOf(st.consent.externalAiAllowed) }
+    var consentLocal by remember { mutableStateOf(st.consent.localOnly) }
+    var doctorIdentity by remember { mutableStateOf(st.doctorIdentity) }
+    var retentionHours by remember { mutableStateOf(st.audioRetentionHours.toString()) }
     var picker by remember { mutableStateOf<PickerTarget?>(null) }
     BackHandler { vm.go(Screen.HOME) }
 
@@ -117,6 +123,74 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
     Page("Settings", onBack = { vm.go(Screen.HOME) }) {
         st.modelsBusy?.let { Text(it); LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
         st.message?.let { Text(it, color = Palette.infoFg, fontWeight = FontWeight.SemiBold) }
+
+        Text("Safety & privacy", style = MaterialTheme.typography.titleMedium)
+        SectionCard("Operating mode", container = Palette.urgentBg) {
+            Text("${st.appMode.label}: the bundled catalogue is not clinician-approved.", fontWeight = FontWeight.SemiBold)
+            Text("Real-patient clinical mode and sharing are disabled until catalogue governance evidence is added. This build is for simulated/test conversations only.")
+            Text("Consent record: ${st.consent.status.name.lowercase().replace('_', ' ')}" + (st.consent.timestampMs?.let { " · recorded" } ?: ""), fontSize = 12.sp)
+        }
+        SectionCard("Recording consent") {
+            Text("Before recording, obtain permission from the participant. Choose exactly one data path; external AI sends audio/transcript to the selected provider.")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = consentExternal, onCheckedChange = { consentExternal = it; if (it) consentLocal = false })
+                Text("Allow external AI provider for this test consultation")
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = consentLocal, onCheckedChange = { consentLocal = it; if (it) consentExternal = false })
+                Text("On-device AI only")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { vm.setConsent(consentExternal, consentLocal) }, enabled = consentExternal xor consentLocal) { Text("Save consent") }
+                if (st.consent.status == ConsentStatus.OBTAINED) TextButton(onClick = { vm.withdrawConsent() }) { Text("Withdraw") }
+            }
+        }
+        SectionCard("Clinician identity for review records") {
+            OutlinedTextField(
+                value = doctorIdentity,
+                onValueChange = { doctorIdentity = it.take(120) },
+                label = { Text("Clinician name or local identifier") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedButton(onClick = { vm.setDoctorIdentity(doctorIdentity) }, enabled = doctorIdentity.trim() != st.doctorIdentity) { Text("Save identity") }
+            Muted("This is stored locally and is required before a document can be marked doctor-confirmed.")
+        }
+        SectionCard("Audio retention") {
+            AudioRetentionPolicy.entries.forEach { policy ->
+                RetentionOption(policy.label, when (policy) {
+                    AudioRetentionPolicy.DELETE_AFTER_TRANSCRIPTION -> "Remove each segment after successful transcription."
+                    AudioRetentionPolicy.DELETE_AFTER_CONSULTATION -> "Keep audio while reviewing, then remove it when the consultation ends."
+                    AudioRetentionPolicy.KEEP_FOR_SHORT_PERIOD -> "Keep audio temporarily for retry/review, then expire it automatically."
+                    AudioRetentionPolicy.DELETE_IMMEDIATELY -> "Remove each segment as soon as processing finishes."
+                }, st.audioRetentionPolicy == policy) { vm.setAudioRetention(policy, retentionHours.toIntOrNull() ?: 24) }
+            }
+            if (st.audioRetentionPolicy == AudioRetentionPolicy.KEEP_FOR_SHORT_PERIOD) {
+                OutlinedTextField(
+                    value = retentionHours,
+                    onValueChange = { retentionHours = it.filter { ch -> ch.isDigit() }.take(3) },
+                    label = { Text("Automatic deletion after hours (1-72)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedButton(onClick = { vm.setAudioRetention(st.audioRetentionPolicy, retentionHours.toIntOrNull() ?: 24) }) { Text("Save retention period") }
+            }
+            OutlinedButton(onClick = { vm.deleteAllAudio() }, modifier = Modifier.fillMaxWidth()) { Text("Delete all recorded audio now") }
+        }
+        SectionCard("Developer diagnostics") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = st.developerMode, onCheckedChange = { vm.setDeveloperMode(it) })
+                Text("Enable developer mode")
+            }
+            Muted("Raw AI responses are hidden unless developer mode is enabled. Privacy-safe prompt redaction stays on by default.")
+            if (st.developerMode) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = st.privacySafePrompts, onCheckedChange = { vm.setPrivacySafePrompts(it) })
+                    Text("Redact common names, phone numbers and email addresses in text prompts")
+                }
+            }
+        }
 
         Text("AI providers", style = MaterialTheme.typography.titleMedium)
         Muted("Add a key for at least one provider. Keys are encrypted on this phone and only sent to that provider.")
@@ -178,7 +252,6 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
             )
             Muted("Audio is cut at the first pause after this many seconds. Shorter = faster live text and suggestions, but more requests (free tiers have daily limits). 12-20 s is a good start.")
         }
-        OutlinedButton(onClick = { vm.deleteAllAudio() }, modifier = Modifier.fillMaxWidth()) { Text("Delete all recorded audio on this phone") }
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -422,6 +495,11 @@ private fun ProviderCard(p: Provider, st: UiState, vm: SessionViewModel) {
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedButton(onClick = { vm.setCustomBaseUrl(url) }, enabled = url != st.customBaseUrl) { Text("Save address") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = st.allowInsecureLocalServer, onCheckedChange = { vm.setAllowInsecureLocalServer(it) })
+                    Text("Allow HTTP only for private/LAN servers (explicit opt-in)")
+                }
+                Muted("HTTPS is required by default. HTTP is rejected unless this opt-in is enabled and the host is localhost or a private LAN address.")
             }
             if (!isLocal) {
                 OutlinedTextField(
@@ -466,4 +544,17 @@ internal fun TagPill(tag: String) = when (tag) {
     "AUDIO" -> Pill("AUDIO", Palette.infoBg, Palette.infoFg)
     "SPEECH-TO-TEXT" -> Pill("SPEECH-TO-TEXT", Palette.infoBg, Palette.infoFg)
     else -> Pill(tag, Palette.greyBg, Palette.greyFg)
+}
+
+@Composable
+private fun RetentionOption(title: String, desc: String, selected: Boolean, onClick: () -> Unit) {
+    if (selected) {
+        Button(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) { Text("✓ $title", fontWeight = FontWeight.Bold); Text(desc, fontSize = 12.sp) }
+        }
+    } else {
+        OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) { Text(title, fontWeight = FontWeight.Bold); Text(desc, fontSize = 12.sp) }
+        }
+    }
 }

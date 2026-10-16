@@ -13,6 +13,15 @@ enum class FlagStatus { UNASSESSED, EXCLUDED, SUSPECTED, CONFIRMED, RESOLVED_BY_
 enum class Source { AI, DERIVED, DOCTOR }
 enum class Gender { MALE, FEMALE, OTHER, UNKNOWN }
 enum class Pregnancy { UNKNOWN, PREGNANT, NOT_PREGNANT }
+enum class ReviewStatus { AI_DRAFT, DOCTOR_REVIEW_REQUIRED, DOCTOR_CONFIRMED, SIGNED, VOIDED }
+
+data class DoctorReview(
+    val status: ReviewStatus = ReviewStatus.AI_DRAFT,
+    val timestampMs: Long? = null,
+    val doctorIdentity: String? = null,
+    val catalogueVersion: String? = null,
+    val modelMetadata: String? = null
+)
 
 data class Demographics(
     val age: Int? = null,
@@ -142,6 +151,8 @@ data class CaseState(
     val sessionLevel: SessionLevel = SessionLevel.INFO,
     val sessionAlerts: List<String> = emptyList(),
     val pregnancyCheckNeeded: Boolean = false,
+    /** Clinical document governance metadata; AI input must never change this. */
+    val review: DoctorReview = DoctorReview(),
     // ---- bookkeeping ----
     val counter: Int = 0,
     val audit: List<String> = emptyList()
@@ -222,4 +233,11 @@ sealed class DoctorAction {
     data class AcceptRegimen(val regimenId: String) : DoctorAction()
     data class DismissRegimen(val regimenId: String) : DoctorAction()
     data class RemoveDictated(val itemId: String) : DoctorAction()
+    data class SetReviewStatus(
+        val status: ReviewStatus,
+        val timestampMs: Long,
+        val doctorIdentity: String?,
+        val catalogueVersion: String?,
+        val modelMetadata: String?
+    ) : DoctorAction()
 }

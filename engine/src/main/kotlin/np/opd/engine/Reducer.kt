@@ -344,6 +344,18 @@ object Reducer {
                 log("removed dictated item ${s.dictated.firstOrNull { it.id == a.itemId }?.stated}")
                 s.copy(dictated = s.dictated.filter { it.id != a.itemId })
             }
+            is DoctorAction.SetReviewStatus -> {
+                log("document status ${a.status}")
+                s.copy(
+                    review = DoctorReview(
+                        status = a.status,
+                        timestampMs = a.timestampMs,
+                        doctorIdentity = a.doctorIdentity,
+                        catalogueVersion = a.catalogueVersion,
+                        modelMetadata = a.modelMetadata
+                    )
+                )
+            }
         }
         return evaluate(next.copy(audit = audit, counter = counter), c)
     }

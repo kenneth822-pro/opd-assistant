@@ -795,6 +795,38 @@ class EngineTest {
         assertEquals(n, restored)
     }
 
+    @Test
+    fun aiInputCannotLoosenDoctorDocumentStatus() {
+        val reviewed = CaseState(
+            review = DoctorReview(
+                status = ReviewStatus.DOCTOR_CONFIRMED,
+                timestampMs = 123L,
+                doctorIdentity = "doctor-placeholder",
+                catalogueVersion = c.version,
+                modelMetadata = "local-model"
+            )
+        )
+        val afterAi = ai(reviewed, LiveDelta(transcript = listOf(TranscriptLine("patient", "खोकी", 0))))
+        assertEquals(reviewed.review, afterAi.review)
+    }
+
+    @Test
+    fun doctorReviewStatusAndMetadataRoundTrip() {
+        val reviewed = dr(
+            CaseState(),
+            DoctorAction.SetReviewStatus(
+                status = ReviewStatus.SIGNED,
+                timestampMs = 456L,
+                doctorIdentity = "local-clinician",
+                catalogueVersion = c.version,
+                modelMetadata = "speech=LOCAL_WHISPER:tiny; notes=LOCAL_LLM:small"
+            )
+        )
+        assertEquals(ReviewStatus.SIGNED, reviewed.review.status)
+        assertEquals("local-clinician", reviewed.review.doctorIdentity)
+        assertEquals(reviewed, CaseState.fromJ(J.parse(reviewed.toJ().toJson()) as J.Obj))
+    }
+
     /* ---------------- expanded catalogue ---------------- */
 
     @Test

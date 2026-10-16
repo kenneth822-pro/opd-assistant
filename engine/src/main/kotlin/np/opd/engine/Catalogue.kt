@@ -148,6 +148,7 @@ data class InvestigationDef(val id: String, val name: String)
 
 class Catalogues(
     val version: String,
+    val manifest: CatalogueManifest = CatalogueManifest.missing(),
     val conditions: Map<String, ConditionDef>,
     val redFlags: Map<String, RedFlagDef>,
     val regimens: Map<String, RegimenDef>,
@@ -176,9 +177,24 @@ class Catalogues(
 
     fun drugMatches(token: String, drug: DrugDef): Boolean = token == drug.id || token in drug.classes
 
+    /** Test/support helper; clinical content itself remains unchanged. */
+    fun withManifest(manifest: CatalogueManifest): Catalogues = Catalogues(
+        version = version,
+        manifest = manifest,
+        conditions = conditions,
+        redFlags = redFlags,
+        regimens = regimens,
+        drugs = drugs,
+        allergies = allergies,
+        comorbidities = comorbidities,
+        interactions = interactions,
+        investigations = investigations
+    )
+
     companion object {
         const val DIR = "/catalogues/v1/"
         val FILES = listOf("conditions.json", "red_flags.json", "regimens.json", "formulary.json", "vocabularies.json")
+        private const val MANIFEST_FILE = "manifest.json"
 
         /** Loads the catalogues bundled as Java resources (works on JVM and Android). */
         fun loadBundled(): Catalogues {
@@ -187,15 +203,26 @@ class Catalogues(
                     ?: throw IllegalStateException("Catalogue resource missing: $name")
                 return stream.use { it.readBytes().toString(Charsets.UTF_8) }
             }
-            return parse(read(FILES[0]), read(FILES[1]), read(FILES[2]), read(FILES[3]), read(FILES[4]))
+            return parse(
+                read(FILES[0]), read(FILES[1]), read(FILES[2]), read(FILES[3]), read(FILES[4]),
+                read(MANIFEST_FILE)
+            )
         }
 
-        fun parse(conditionsJson: String, redFlagsJson: String, regimensJson: String, formularyJson: String, vocabJson: String): Catalogues {
+        fun parse(
+            conditionsJson: String,
+            redFlagsJson: String,
+            regimensJson: String,
+            formularyJson: String,
+            vocabJson: String,
+            manifestJson: String? = null
+        ): Catalogues {
             val cj = J.parse(conditionsJson) as J.Obj
             val rj = J.parse(redFlagsJson) as J.Obj
             val gj = J.parse(regimensJson) as J.Obj
             val fj = J.parse(formularyJson) as J.Obj
             val vj = J.parse(vocabJson) as J.Obj
+            val manifest = manifestJson?.let { CatalogueManifest.fromJ(J.parse(it) as J.Obj) } ?: CatalogueManifest.missing()
 
             val conditions = LinkedHashMap<String, ConditionDef>()
             for (c in cj.objs("conditions")) {
@@ -329,6 +356,7 @@ class Catalogues(
 
             return Catalogues(
                 version = cj.strOr("version", "?"),
+                manifest = manifest,
                 conditions = conditions,
                 redFlags = flags,
                 regimens = regimens,
@@ -351,6 +379,13 @@ object CatalogueIntegrity {
 
     fun check(c: Catalogues): List<String> {
         val errors = mutableListOf<String>()
+        c.manifest.missingRequiredMetadata().forEach { errors += "catalogue manifest: missing $it" }
+        if (c.manifest.version != c.version) errors += "catalogue manifest: version ${c.manifest.version} does not match catalogue ${c.version}"
+        if (c.manifest.approvalStatus == CatalogueApprovalStatus.EXPIRED) errors += "catalogue manifest: catalogue is EXPIRED"
+        if (c.manifest.approvalStatus == CatalogueApprovalStatus.CLINICIAN_APPROVED) {
+            if (c.manifest.sourceDocuments.isEmpty()) errors += "catalogue manifest: approved catalogue needs source_documents"
+            if (c.manifest.reviewers.isEmpty()) errors += "catalogue manifest: approved catalogue needs reviewers"
+        }
         fun ruleErrors(where: String, r: Rule?) {
             if (r == null) return
             if (r.compositeOp != null) {

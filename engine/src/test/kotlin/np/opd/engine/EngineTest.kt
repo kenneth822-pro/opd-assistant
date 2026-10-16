@@ -33,6 +33,27 @@ class EngineTest {
         val errors = CatalogueIntegrity.check(c)
         assertTrue("Catalogue errors:\n" + errors.joinToString("\n"), errors.isEmpty())
         assertEquals(20, c.conditions.size)
+        assertEquals(CatalogueApprovalStatus.SIMULATION_ONLY, c.manifest.approvalStatus)
+    }
+
+    @Test
+    fun catalogueGovernanceMetadataIsRequiredAndApprovedContentNeedsEvidence() {
+        assertTrue(CatalogueManifest.fromJ(J.obj("catalogue_version" to "1")).missingRequiredMetadata().isNotEmpty())
+        val approved = c.withManifest(
+            CatalogueManifest(
+                version = c.version,
+                jurisdiction = "Nepal",
+                sourceDocuments = emptyList(),
+                effectiveDate = "2026-01-01",
+                reviewDate = "2026-01-02",
+                reviewers = emptyList(),
+                approvalStatus = CatalogueApprovalStatus.CLINICIAN_APPROVED,
+                presentFields = setOf("catalogue_version", "jurisdiction", "source_documents", "effective_date", "review_date", "reviewers", "approval_status")
+            )
+        )
+        val errors = CatalogueIntegrity.check(approved)
+        assertTrue(errors.any { it.contains("approved catalogue needs source_documents") })
+        assertTrue(errors.any { it.contains("approved catalogue needs reviewers") })
     }
 
     @Test

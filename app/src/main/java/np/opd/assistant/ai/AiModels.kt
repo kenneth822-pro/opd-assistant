@@ -200,12 +200,7 @@ object ModelDirectory {
         if (sttDir.exists()) {
             sttDir.listFiles()?.forEach { modelDir ->
                 if (modelDir.isDirectory) {
-                    val encoder = File(modelDir, "encoder.int8.onnx")
-                    val decoder = File(modelDir, "decoder.int8.onnx")
-                    val tokens = File(modelDir, "tokens.txt")
-                    val vad = File(modelDir, "silero_vad.onnx")
-                    if (encoder.exists() && decoder.exists() && tokens.exists() && vad.exists()) {
-                        val isMultilingual = !modelDir.name.contains(".en")
+                    if (LocalWhisperClient.isValidModelDir(modelDir)) {
                         // modelDir.name is already the full model ID (e.g., "sherpa-onnx-whisper-tiny")
                         out += ModelInfo(
                             provider = Provider.LOCAL_WHISPER,
@@ -230,9 +225,7 @@ object ModelDirectory {
             val assets = context.assets.list(assetName) ?: emptyArray()
             if (assets.isNotEmpty()) {
                 val bundledDir = File(sttDir, assetName)
-                val complete = File(bundledDir, "encoder.int8.onnx").exists() &&
-                    File(bundledDir, "decoder.int8.onnx").exists() &&
-                    File(bundledDir, "tokens.txt").exists()
+                val complete = LocalWhisperClient.isValidModelDir(bundledDir)
                 if (!complete) LocalWhisperClient.copyBundledModel(context, assetName, bundledDir)
                 if (!out.any { it.id == assetName }) {
                     out += ModelInfo(

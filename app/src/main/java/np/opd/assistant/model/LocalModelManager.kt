@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -13,12 +14,14 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import np.opd.assistant.ai.LocalLlmClient
+import np.opd.assistant.ai.LocalWhisperClient
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
+import java.io.IOException
+import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 /**
  * Manages local model files (download, cache, verification).
@@ -66,17 +69,10 @@ class LocalModelManager(private val app: Application) {
     private fun scanSttModels(): LocalModelList {
         val items = mutableListOf<LocalModel>()
         sttModelsDir.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
-            val encoder = findFile(dir, "encoder.int8.onnx")
-            val decoder = findFile(dir, "decoder.int8.onnx")
-            val tokens = findFile(dir, "tokens.txt")
-            val vad = findFile(dir, "silero_vad.onnx")
-            val hasEncoder = encoder != null
-            val hasDecoder = decoder != null
-            val hasTokens = tokens != null
-            val hasVad = vad != null
+            val ready = LocalWhisperClient.isValidModelDir(dir)
 
             val allFiles = listAllFiles(dir)
-            Log.i(TAG, "Scanning model dir ${dir.name}: encoder=$encoder, decoder=$decoder, tokens=$tokens, vad=$vad")
+            Log.i(TAG, "Scanning model dir ${dir.name}: ready=$ready")
             Log.i(TAG, "All files in ${dir.name}: ${allFiles.joinToString(", ")}")
 
             val def = AvailableSttModels.ALL[dir.name]
@@ -85,28 +81,12 @@ class LocalModelManager(private val app: Application) {
                 name = def?.name ?: dir.name,
                 type = ModelType.STT,
                 path = dir,
-                isComplete = hasEncoder && hasDecoder && hasTokens && hasVad,
+                isComplete = ready,
                 sizeBytes = def?.sizeBytes ?: 0,
                 language = def?.language ?: "Unknown"
             ))
         }
         return LocalModelList(items)
-    }
-
-    private fun findFile(dir: File, name: String): File? {
-        return findFileRecursive(dir, name)
-    }
-
-    private fun findFileRecursive(dir: File, name: String): File? {
-        val files = dir.listFiles() ?: return null
-        for (file in files) {
-            if (file.name == name) return file
-            if (file.isDirectory) {
-                val found = findFileRecursive(file, name)
-                if (found != null) return found
-            }
-        }
-        return null
     }
 
     private fun listAllFiles(dir: File, prefix: String = ""): List<String> {
@@ -124,15 +104,15 @@ class LocalModelManager(private val app: Application) {
     private fun scanLlmModels(): LocalModelList {
         val items = mutableListOf<LocalModel>()
         llmModelsDir.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
-            val pteFile = dir.listFiles()?.firstOrNull { it.extension == "pte" }
-            val tokenizerFile = File(dir, "tokenizer.model")
+            val files = LocalLlmClient.findModelFiles(dir)
+            val pteFile = files?.first
             val def = AvailableLlmModels.ALL.values.firstOrNull { it.files.contains(pteFile?.name) }
             items.add(LocalModel(
                 id = dir.name,
                 name = def?.name ?: dir.name,
                 type = ModelType.LLM,
                 path = dir,
-                isComplete = pteFile != null && tokenizerFile.exists(),
+                isComplete = files != null,
                 sizeBytes = def?.sizeBytes ?: pteFile?.length() ?: 0,
                 language = def?.language ?: "Code/LLM"
             ))
@@ -160,39 +140,60 @@ class LocalModelManager(private val app: Application) {
         val job = scope.launch {
             var retryCount = 0
             val maxRetries = 3
-            
-            while (retryCount <= maxRetries) {
-                try {
-                    _downloadProgress.update { it.copy(active = def.id, progress = 0f, status = if (retryCount > 0) "Retry $retryCount of $maxRetries..." else "Starting...") }
-                    targetDir.mkdirs()
-
+            val stagingDir = File(targetDir.parentFile, ".${targetDir.name}.download")
+            try {
+                while (retryCount <= maxRetries) {
                     try {
+                        _downloadProgress.update { it.copy(active = def.id, progress = 0f, status = if (retryCount > 0) "Retry $retryCount of $maxRetries..." else "Starting...") }
+                        stagingDir.deleteRecursively()
+                        stagingDir.mkdirs()
+
                         if (def.url.endsWith(".tar.bz2")) {
-                            downloadAndExtractTarBz2(def.url, targetDir, def)
+                            downloadAndExtractTarBz2(def.url, stagingDir, def)
                         } else {
-                            downloadFiles(def.url, def.files, targetDir)
+                            downloadFiles(def.url, def.files, stagingDir)
                         }
+                        if (!isComplete(def, stagingDir)) {
+                            throw IOException("Downloaded ${def.id} is incomplete")
+                        }
+                        promote(stagingDir, targetDir)
                         _downloadProgress.update { it.copy(active = null, progress = 1f, status = "Complete") }
                         refreshLists()
                         return@launch // Success, exit retry loop
+                    } catch (e: CancellationException) {
+                        stagingDir.deleteRecursively()
+                        throw e
                     } catch (e: Exception) {
                         retryCount++
                         if (retryCount > maxRetries) {
-                            throw e
+                            Log.e(TAG, "Download failed for ${def.id} after $maxRetries retries", e)
+                            _downloadProgress.update { it.copy(active = null, progress = 0f, status = "Failed after $maxRetries retries: ${e.message}") }
+                            stagingDir.deleteRecursively()
+                            return@launch
                         }
                         Log.w(TAG, "Download failed for ${def.id}, retrying... (attempt $retryCount)", e)
                         _downloadProgress.update { it.copy(progress = 0f, status = "Retry $retryCount of $maxRetries...") }
                         delay((2000L * retryCount)) // Exponential backoff
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Download failed for ${def.id} after $maxRetries retries", e)
-                    _downloadProgress.update { it.copy(active = null, progress = 0f, status = "Failed after $maxRetries retries: ${e.message}") }
-                } finally {
-                    activeDownloads.remove(def.id)
                 }
+            } finally {
+                activeDownloads.remove(def.id)
             }
         }
         activeDownloads[def.id] = job
+    }
+
+    private fun isComplete(def: ModelDef, dir: File): Boolean = when (def.type) {
+        ModelType.STT -> LocalWhisperClient.isValidModelDir(dir)
+        ModelType.LLM -> LocalLlmClient.isValidModelDir(dir)
+    }
+
+    /** Installs a fully downloaded model in one rename so inference never sees partial files. */
+    private fun promote(stagingDir: File, targetDir: File) {
+        targetDir.deleteRecursively()
+        if (!stagingDir.renameTo(targetDir)) {
+            throw IOException("Could not install model ${targetDir.name}")
+        }
     }
 
     private fun downloadAndExtractTarBz2(url: String, targetDir: File, def: ModelDef) {
@@ -227,27 +228,38 @@ class LocalModelManager(private val app: Application) {
 
     private fun downloadFile(urlString: String, targetFile: File, progressCallback: (Float) -> Unit) {
         val url = URL(urlString)
-        val connection = url.openConnection()
-        connection.connect()
-        val fileSize = connection.contentLengthLong
-
-        val input = connection.getInputStream()
-        val output = FileOutputStream(targetFile)
-        val buffer = ByteArray(8192)
-        var downloaded = 0L
-
-        while (true) {
-            val read = input.read(buffer)
-            if (read == -1) break
-            output.write(buffer, 0, read)
-            downloaded += read
-            if (fileSize > 0) {
-                progressCallback(downloaded.toFloat() / fileSize)
+        val connection = url.openConnection() as? HttpURLConnection
+            ?: throw IOException("Unsupported download URL: $urlString")
+        val partFile = File(targetFile.parentFile, ".${targetFile.name}.part")
+        try {
+            connection.connectTimeout = 30_000
+            connection.readTimeout = 120_000
+            connection.instanceFollowRedirects = true
+            connection.connect()
+            if (connection.responseCode !in 200..299) {
+                throw IOException("HTTP ${connection.responseCode} while downloading ${url.host}")
             }
+            val fileSize = connection.contentLengthLong
+            val buffer = ByteArray(8192)
+            var downloaded = 0L
+            connection.inputStream.use { input ->
+                FileOutputStream(partFile).use { output ->
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                        downloaded += read
+                        if (fileSize > 0) progressCallback(downloaded.toFloat() / fileSize)
+                    }
+                    output.fd.sync()
+                }
+            }
+            targetFile.delete()
+            if (!partFile.renameTo(targetFile)) throw IOException("Could not install ${targetFile.name}")
+        } finally {
+            partFile.delete()
+            connection.disconnect()
         }
-        output.flush()
-        output.close()
-        input.close()
     }
 
     private fun extractTarBz2(tarFile: File, targetDir: File, filePrefix: String) {
@@ -256,11 +268,19 @@ class LocalModelManager(private val app: Application) {
             val bis = java.io.BufferedInputStream(java.io.FileInputStream(tarFile))
             val bz2In = org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(bis)
             val tarIn = org.apache.commons.compress.archivers.tar.TarArchiveInputStream(bz2In)
+            val root = targetDir.canonicalFile
+            val rootPrefix = root.path + File.separator
 
             var entry = tarIn.getNextTarEntry()
             var entryCount = 0
             while (entry != null) {
-                val outFile = File(targetDir, entry.name)
+                if (entry.isSymbolicLink || entry.isLink) {
+                    throw IOException("Refusing link in model archive: ${entry.name}")
+                }
+                val outFile = File(root, entry.name).canonicalFile
+                if (outFile.path != root.path && !outFile.path.startsWith(rootPrefix)) {
+                    throw IOException("Refusing path outside model directory: ${entry.name}")
+                }
                 if (entry.isDirectory) {
                     outFile.mkdirs()
                 } else {
@@ -283,10 +303,6 @@ class LocalModelManager(private val app: Application) {
             val allFiles = listAllFiles(targetDir)
             Log.i(TAG, "All files after extraction: ${allFiles.joinToString(", ")}")
 
-            // Flatten any extracted subdirectories into targetDir FIRST, so the prefix
-            // rename below operates on a single flat directory.
-            moveFilesFromSubdir(targetDir)
-
             if (filePrefix.isNotBlank()) {
                 renameFilesWithPrefix(targetDir, filePrefix)
             }
@@ -301,36 +317,15 @@ class LocalModelManager(private val app: Application) {
 
     private fun renameFilesWithPrefix(dir: File, prefix: String) {
         dir.listFiles()?.forEach { file ->
-            if (file.isDirectory) return@forEach
-            if (file.name.startsWith(prefix)) {
+            if (file.isDirectory) {
+                renameFilesWithPrefix(file, prefix)
+            } else if (file.name.startsWith(prefix)) {
                 val newName = file.name.substring(prefix.length)
-                val newFile = File(dir, newName)
-                if (file.renameTo(newFile)) {
-                    Log.i(TAG, "Renamed ${file.name} -> $newName")
-                } else {
-                    Log.w(TAG, "Failed to rename ${file.name}")
+                val newFile = File(file.parentFile, newName)
+                if (newFile.exists() || !file.renameTo(newFile)) {
+                    throw IOException("Could not rename ${file.name} in model archive")
                 }
-            }
-        }
-    }
-
-    private fun moveFilesFromSubdir(dir: File) {
-        val subdirs = dir.listFiles()?.filter { it.isDirectory }?.toList() ?: emptyList()
-        Log.i(TAG, "Checking subdirs for moving: ${subdirs.map { it.name }}")
-        subdirs.forEach { subdir ->
-            val files = subdir.listFiles() ?: emptyArray()
-            Log.i(TAG, "Moving files from subdir ${subdir.name}: ${files.map { it.name }}")
-            files.forEach { file ->
-                val dest = File(dir, file.name)
-                if (file.renameTo(dest)) {
-                    Log.i(TAG, "Moved ${file.name} from subdir to model dir")
-                } else {
-                    Log.w(TAG, "Failed to move ${file.name} from ${subdir.name}")
-                }
-            }
-            if (subdir.listFiles()?.isEmpty() == true) {
-                subdir.delete()
-                Log.i(TAG, "Deleted empty subdir ${subdir.name}")
+                Log.i(TAG, "Renamed ${file.name} -> $newName")
             }
         }
     }

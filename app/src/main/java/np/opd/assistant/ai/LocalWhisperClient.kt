@@ -1,7 +1,6 @@
 package np.opd.assistant.ai
 
 import android.content.Context
-import android.util.Log
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
@@ -30,7 +29,6 @@ class LocalWhisperClient(
     private val modelDir: File
 ) : AiClient {
 
-    private val TAG = "LocalWhisperClient"
     private val recognizer: OfflineRecognizer by lazy { getOrCreateRecognizer(modelDir) }
 
     override val model: ModelInfo = ModelInfo(
@@ -80,19 +78,22 @@ class LocalWhisperClient(
         private val cache = ConcurrentHashMap<String, OfflineRecognizer>()
 
         private fun getOrCreateRecognizer(dir: File): OfflineRecognizer {
-            val key = dir.absolutePath
+            val encoder = requiredFile(dir, "encoder.int8.onnx")
+            val decoder = requiredFile(dir, "decoder.int8.onnx")
+            val tokens = requiredFile(dir, "tokens.txt")
+            val key = dir.canonicalPath
             cache[key]?.let { return it }
             synchronized(cache) {
                 cache[key]?.let { return it }
                 val whisper = OfflineWhisperModelConfig(
-                    encoder = File(dir, "encoder.int8.onnx").absolutePath,
-                    decoder = File(dir, "decoder.int8.onnx").absolutePath,
+                    encoder = encoder.absolutePath,
+                    decoder = decoder.absolutePath,
                     language = if (dir.name.endsWith(".en")) "en" else "",
                     task = "transcribe"
                 )
                 val modelConfig = OfflineModelConfig(
                     whisper = whisper,
-                    tokens = File(dir, "tokens.txt").absolutePath,
+                    tokens = tokens.absolutePath,
                     numThreads = 4,
                     provider = "cpu"
                 )
@@ -116,12 +117,32 @@ class LocalWhisperClient(
 
         private const val WAV_HEADER = 44
 
-        /** Checks if a model directory has all required files. */
+        /**
+         * Checks if a model directory has the files used by the recognizer.
+         *
+         * Sherpa archives have changed their top-level directory layout over time. The model
+         * installer deliberately preserves the archive layout, so lookup must be recursive rather
+         * than assuming encoder/decoder/tokens are directly under the model directory. VAD is not
+         * required here: the app already performs pause/VAD-like segmentation before inference.
+         */
         fun isValidModelDir(dir: File): Boolean {
             return dir.isDirectory &&
-                File(dir, "encoder.int8.onnx").exists() &&
-                File(dir, "decoder.int8.onnx").exists() &&
-                File(dir, "tokens.txt").exists()
+                requiredFileOrNull(dir, "encoder.int8.onnx") != null &&
+                requiredFileOrNull(dir, "decoder.int8.onnx") != null &&
+                requiredFileOrNull(dir, "tokens.txt") != null
+        }
+
+        private fun requiredFile(dir: File, name: String): File =
+            requiredFileOrNull(dir, name)
+                ?: throw IllegalStateException("Missing $name in ${dir.name}")
+
+        private fun requiredFileOrNull(dir: File, name: String): File? {
+            val children = dir.listFiles() ?: return null
+            for (child in children) {
+                if (child.isFile && child.name == name) return child
+                if (child.isDirectory) requiredFileOrNull(child, name)?.let { return it }
+            }
+            return null
         }
 
         /** Copies bundled asset model to internal storage for use. */

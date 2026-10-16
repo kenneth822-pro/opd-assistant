@@ -128,17 +128,18 @@ class LocalLlmClient(
 
         /** Checks if model files exist and are valid. */
         fun isValidModelDir(dir: File): Boolean {
-            return dir.isDirectory &&
-                dir.listFiles()?.any { it.extension == "pte" } == true &&
-                File(dir, "tokenizer.model").exists()
+            return findModelFiles(dir) != null
         }
 
         /** Finds the .pte model file and tokenizer in a directory. */
         fun findModelFiles(dir: File): Pair<File, File>? {
-            val pte = dir.listFiles()?.firstOrNull { it.extension == "pte" }
-            val tokenizer = File(dir, "tokenizer.model")
-            if (pte != null && tokenizer.exists()) {
-                return pte to tokenizer
+            if (!dir.isDirectory) return null
+            val files = dir.listFiles() ?: return null
+            val pte = files.firstOrNull { it.isFile && it.extension == "pte" }
+            val tokenizer = files.firstOrNull { it.isFile && it.name == "tokenizer.model" }
+            if (pte != null && tokenizer != null) return pte to tokenizer
+            for (child in files) {
+                if (child.isDirectory) findModelFiles(child)?.let { return it }
             }
             return null
         }

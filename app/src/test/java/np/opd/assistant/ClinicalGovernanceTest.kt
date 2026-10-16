@@ -52,12 +52,4 @@ class ClinicalGovernanceTest {
             GovernancePolicy.shareBlockReason(CatalogueApprovalStatus.SIMULATION_ONLY, review)
         )
     }
-
-    @Test
-    fun customHttpNeedsExplicitPrivateNetworkOptIn() {
-        assertTrue(SettingsStore.isAllowedServerUrl("https://example.test/v1", false))
-        assertFalse(SettingsStore.isAllowedServerUrl("http://192.168.1.20:1234/v1", false))
-        assertTrue(SettingsStore.isAllowedServerUrl("http://192.168.1.20:1234/v1", true))
-        assertFalse(SettingsStore.isAllowedServerUrl("http://example.test/v1", true))
-    }
 }

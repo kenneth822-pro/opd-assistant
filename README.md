@@ -20,7 +20,21 @@ Every time code changes, GitHub builds the app automatically (about 5–10 minut
 4. Open the downloaded file. If Android asks, allow **"Install unknown apps"** for your browser, then tap **Install**.
 5. Later builds install over the old one (same test signing key), so your settings are kept.
 
-If the newest build is missing, open the **Actions** tab: a red ✗ means the build failed (tell Claude and paste the error).
+If the newest build is missing, open the **Actions** tab: a red ✗ means the build failed (tell OmniRush.ai and paste the error).
+
+The repository workflow is the automatic build/publish step: a push to `main` runs the tests,
+builds the APK, and publishes a GitHub Release. Do **not** put a GitHub private key, API key or
+password in this folder, a commit, or chat. Authenticate Git locally with GitHub's credential
+manager or an SSH agent, then push normally:
+
+```bash
+git add .
+git commit -m "feat: describe the change"
+git push origin main
+```
+
+The workflow is the only place that publishes the APK; it does not silently push source code back
+to GitHub. This keeps source changes reviewable and prevents a leaked key from granting write access.
 
 ## 2. Add a key and choose models
 
@@ -50,7 +64,9 @@ Tap **Test selected models** to check all three. Keys are encrypted on the phone
 
 1. **New consultation** → **Live assist** (help while you talk) or **Scribe only** (fewer requests).
 2. Age and sex are optional: if you leave them blank, the app fills them from the conversation ("४५ वर्ष", "दिदी", "बुबा", "मेरो श्रीमान्") and marks them **(heard)** so you can check them.
-3. **Start recording**, place the phone between doctor and "patient", keep the app open (screen stays on).
+3. **Start recording**, place the phone between doctor and "patient". A microphone foreground
+   service keeps capture alive if you briefly switch apps or the screen turns off; Android shows a
+   persistent recording notification.
 4. Talk normally in Nepali / English. The live screen shows, from top to bottom:
    - **Patient chips** — age, sex, vitals (tap to edit), allergies, current medicines.
    - **Ask next** — red flags the patient may have mentioned (Present / Absent), red flags to **rule out**, pregnancy check, protocol checklist questions (Asked), the AI's suggested next questions, "don't forget" basics (allergy, current medicines), and conditions that **sound likely from keywords** (Add).
@@ -83,7 +99,7 @@ Mic → gap-free WAV parts (cut at pauses; silent parts skipped)
 End: full transcript → notes model writes the final note (phone-built note if it fails) → Review
 ```
 
-The built-in catalogue (14 common OPD conditions with keywords in Nepali and English, question
+The built-in catalogue (20 common adult OPD conditions with keywords in Nepali and English, question
 checklists, red flags, regimens and a formulary) runs entirely on the phone. It gives instant
 guidance as soon as a condition is recognised or added, and keeps working when the AI is slow or down;
 the AI adds understanding of free speech on top.
@@ -93,7 +109,7 @@ Key safety rules (all enforced in code and covered by tests):
 - The AI never chooses a medicine or writes instructions. It reports what was said; the app picks the regimen from the catalogue and fills doses and Nepali instructions from fixed templates.
 - Keyword hints never change the case by themselves; the doctor confirms them with one tap.
 - Only the doctor can loosen safety: clear a red flag, confirm "not pregnant", remove an allergy, override an escalation (with a reason in the audit log).
-- Unknown is never treated as safe (e.g. unknown pregnancy status blocks teratogenic drugs; unassessed CRB-65 items are shown).
+- Unknown is never treated as safe (e.g. unknown pregnancy status blocks teratogenic drugs; unassessed CRB-65 items are shown; unknown/under-18 age blocks this adult-only catalogue).
 - Measured red flags (RR, SpO2, BP) are confirmed only by numbers, and a later normal reading never silently clears them.
 
 ## 5. Repository layout
@@ -102,27 +118,40 @@ Key safety rules (all enforced in code and covered by tests):
 |---|---|
 | `engine/src/main/resources/catalogues/v1/` | **All clinical content** (conditions, red flags, regimens, formulary, interactions). Review these JSON files clinically. |
 | `engine/src/main/kotlin/` | Safety engine: reducer, safety checks, Nepali instruction templates, prompt + schema builder. No dependencies. |
-| `engine/src/test/kotlin/` | 53 tests incl. catalogue integrity, keyword hints with Nepali negation, and a randomized "AI can never loosen safety" check. |
+| `engine/src/test/kotlin/` | 62 tests incl. catalogue integrity, keyword hints with Nepali negation, adult-only dosing guards, persistence round-trips, and a randomized "AI can never loosen safety" check. |
 | `app/` | Android app (Kotlin + Jetpack Compose). |
 | `.github/workflows/build.yml` | Runs the tests, builds the APK, publishes it as a Release. |
 | `keystore/testing.jks` | **Test-only** signing key so updates install over each other. Never use for a published app. |
 
 ## 6. Known limitations of this prototype
 
-- Recording only works while the app is open on screen (no background recording service yet).
+- The foreground recording service keeps the microphone alive in the background, but Android may
+  still revoke microphone access or kill the process; the app reports a dead recorder and offers a
+  restart attempt. Verify this on the target phone.
 - No patient records are saved; starting a new consultation deletes the previous audio.
 - No PDF / thermal printing yet (Share as text only).
 - Speaker labels come from the AI and can be wrong (Whisper gives none; the notes model infers them).
 - Free model tiers have daily limits; a 10-minute live consultation uses roughly 40-80 requests.
-- The catalogue covers 14 adult OPD conditions. Children, pregnancy-specific care and emergencies are out of scope.
+- The catalogue covers 20 adult OPD conditions. Children, pregnancy-specific care and emergencies are out of scope; age is now required before a protocol regimen can be suggested.
 - Brand names and safety metadata are best-effort placeholders.
 
-## 7. For developers
+## 7. Reproducible developer setup
 
 ```bash
-./gradlew :engine:test          # run the safety engine tests
-./gradlew :app:assembleDebug    # build the APK (needs Android SDK)
+make test                       # offline engine tests after dependencies are cached
+make apk                        # debug APK (needs Android SDK)
+make check                      # test + APK build
+docker build --tag opd-assistant:local .  # clean Linux/JDK/Android SDK build
+```
+
+The Gradle wrapper pins Gradle 8.11.1 and `.java-version`/CI/Docker pin Java 17. The Docker image
+installs Android API 35, build tools 35.0.0, NDK 27.0.12077973 and CMake 3.22.1. After the image
+has been built once, `make test` and the Docker `CMD` use Gradle's offline mode. On Windows without
+GNU Make, run the equivalent wrapper commands directly:
+
+```powershell
+./gradlew.bat :engine:test --offline --no-daemon --stacktrace
+./gradlew.bat :app:assembleDebug --offline --no-daemon --stacktrace
 ```
 
 Open the folder in Android Studio to work on the app. The engine can be edited in any IDE.
-# Build trigger

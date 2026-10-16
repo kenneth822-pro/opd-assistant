@@ -43,6 +43,7 @@ import np.opd.engine.Reducer
 import np.opd.engine.TranscriptLine
 import np.opd.engine.toJ
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.ConcurrentHashMap
@@ -158,6 +159,8 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     /** Models that recently failed with "busy"/"missing" are skipped for a minute when a backup exists. */
     private val cooldownUntil = ConcurrentHashMap<String, Long>()
     private val keyCache = ConcurrentHashMap<Provider, String>()
+    private val snapshotLock = Any()
+    @Volatile private var snapshotVersion = 0L
     private var sessionSpeech: ModelInfo? = null
     private var sessionNotes: ModelInfo? = null
     private var sessionPersona: ClinicalPersona = ClinicalPersona.GENERAL_OPD
@@ -220,6 +223,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     private fun saveSessionSnapshot() {
         val st = _ui.value
         if (!st.hasSession) return
+        val version = ++snapshotVersion
         val json = J.obj(
             "mode" to st.mode.name,
             "case" to st.case.toJ(),
@@ -227,7 +231,26 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         ).toJson()
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                sessionFile().writeText(json)
+                synchronized(snapshotLock) {
+                    if (version == snapshotVersion) {
+                        val target = sessionFile()
+                        val temporary = File(target.parentFile, ".${target.name}.tmp")
+                        FileOutputStream(temporary).use { output ->
+                            output.write(json.toByteArray(Charsets.UTF_8))
+                            output.fd.sync()
+                        }
+                        if (version == snapshotVersion) {
+                            if (!temporary.renameTo(target)) {
+                                target.delete()
+                                if (!temporary.renameTo(target)) {
+                                    throw IllegalStateException("Could not install consultation snapshot")
+                                }
+                            }
+                        } else {
+                            temporary.delete()
+                        }
+                    }
+                }
             } catch (e: Exception) {
                 // Persistence is a convenience; a write failure must not affect the consultation.
             }
@@ -385,8 +408,12 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteAllAudio() {
         if (_ui.value.recording) return
+        snapshotVersion++
         File(getApplication<Application>().filesDir, "sessions").deleteRecursively()
-        try { sessionFile().delete() } catch (e: Exception) { /* nothing to delete */ }
+        try {
+            sessionFile().delete()
+            File(sessionFile().parentFile, ".${sessionFile().name}.tmp").delete()
+        } catch (e: Exception) { /* nothing to delete */ }
         synchronized(segments) { segments.clear() }
         showMessage("All recorded audio deleted from this phone.")
     }
@@ -498,7 +525,15 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         var case = CaseState()
         if (age != null || gender != null) case = Reducer.handle(case, DoctorAction.SetDemographics(age, gender), cat)
         val dir = File(getApplication<Application>().filesDir, "sessions/${case.sessionId}").apply { mkdirs() }
-        val rec = WavSegmentRecorder(dir, { settings.segmentSeconds }) { file, startMs, durMs, voiced -> onSegment(file, startMs, durMs, voiced) }
+        val rec = WavSegmentRecorder(
+            dir = dir,
+            targetSeconds = { settings.segmentSeconds },
+            onSegment = { file, startMs, durMs, voiced -> onSegment(file, startMs, durMs, voiced) },
+            onRecorderError = { reason ->
+                RecordingService.stop(getApplication())
+                _ui.update { it.copy(paused = true, message = "Microphone stopped: $reason End the consultation or tap Resume to try again.") }
+            }
+        )
         try {
             rec.start()
         } catch (e: Exception) {
@@ -930,6 +965,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     fun newConsultation() {
         if (_ui.value.recording) return
+        snapshotVersion++
         try { sessionFile().delete() } catch (e: Exception) { /* nothing to delete */ }
         _ui.value = withSettings(UiState(screen = Screen.SETUP))
     }

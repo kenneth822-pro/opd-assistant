@@ -43,7 +43,9 @@ class RecordingService : Service() {
             // Background-start restrictions / permission denial must never crash a live consultation.
             android.util.Log.w(TAG, "Could not start foreground service: ${e.message}")
         }
-        return START_STICKY
+        // The ViewModel owns the AudioRecord. Restarting this notification after the app process
+        // has been killed would falsely suggest that audio is still being captured.
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {

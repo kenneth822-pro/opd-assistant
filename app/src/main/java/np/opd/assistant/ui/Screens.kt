@@ -3,6 +3,7 @@ package np.opd.assistant.ui
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -163,8 +164,10 @@ private fun SetupScreen(st: UiState, vm: SessionViewModel) {
     var age by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf<Gender?>(null) }
     val start = { vm.startConsult(mode, age.toIntOrNull()?.takeIf { it in 0..120 }, gender, persona) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) start() else vm.showMessage("Microphone permission is needed to record the consultation.")
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants[Manifest.permission.RECORD_AUDIO] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        ) start() else vm.showMessage("Microphone permission is needed to record the consultation.")
     }
     BackHandler { vm.go(Screen.HOME) }
     Page("New consultation", onBack = { vm.go(Screen.HOME) }) {
@@ -203,8 +206,15 @@ private fun SetupScreen(st: UiState, vm: SessionViewModel) {
         }
         Button(
             onClick = {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
-                else launcher.launch(Manifest.permission.RECORD_AUDIO)
+                val needed = buildList {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                        add(Manifest.permission.RECORD_AUDIO)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                if (needed.isEmpty()) start() else launcher.launch(needed.toTypedArray())
             },
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) { Text("Start recording", fontSize = 18.sp) }

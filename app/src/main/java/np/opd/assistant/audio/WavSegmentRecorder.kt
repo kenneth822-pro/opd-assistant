@@ -22,7 +22,8 @@ import kotlin.math.sqrt
 class WavSegmentRecorder(
     private val dir: File,
     private val targetSeconds: () -> Int,
-    private val onSegment: (File, Long, Long, Float) -> Unit
+    private val onSegment: (File, Long, Long, Float) -> Unit,
+    private val onRecorderError: (String) -> Unit = {}
 ) {
     @Volatile private var running = false
     @Volatile private var cutRequested = false
@@ -41,6 +42,7 @@ class WavSegmentRecorder(
     fun start() {
         if (running) return
         val minBuf = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        if (minBuf <= 0) throw IllegalStateException("The microphone reported an invalid buffer size")
         val chunkBytes = maxOf(minBuf, RATE / 5 * 2) // at least 200 ms per read
         val rec = AudioRecord(
             MediaRecorder.AudioSource.MIC, RATE, AudioFormat.CHANNEL_IN_MONO,
@@ -50,7 +52,16 @@ class WavSegmentRecorder(
             rec.release()
             throw IllegalStateException("The microphone could not be opened (is another app using it?)")
         }
-        rec.startRecording()
+        try {
+            rec.startRecording()
+        } catch (e: Exception) {
+            rec.release()
+            throw IllegalStateException("The microphone could not start: ${e.message}", e)
+        }
+        if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+            rec.release()
+            throw IllegalStateException("The microphone did not enter recording state")
+        }
         running = true
         thread = Thread({ loop(rec, chunkBytes / 2) }, "wav-recorder").apply {
             isDaemon = true
@@ -74,10 +85,21 @@ class WavSegmentRecorder(
     private fun loop(rec: AudioRecord, samplesPerRead: Int) {
         val buf = ShortArray(samplesPerRead)
         var seg: SegmentWriter? = null
+        var consecutiveReadErrors = 0
         try {
             while (running) {
                 val n = rec.read(buf, 0, buf.size)
-                if (n <= 0) continue
+                if (n <= 0) {
+                    consecutiveReadErrors++
+                    if (n == AudioRecord.ERROR_DEAD_OBJECT || consecutiveReadErrors >= MAX_CONSECUTIVE_READ_ERRORS) {
+                        running = false
+                        reportError(if (n == AudioRecord.ERROR_DEAD_OBJECT) "The microphone was disconnected or taken by another app." else "The microphone stopped returning audio.")
+                        break
+                    }
+                    Thread.sleep(40)
+                    continue
+                }
+                consecutiveReadErrors = 0
                 val writer = seg ?: SegmentWriter(nextFile(), totalSamples).also { seg = it }
                 writer.write(buf, n)
                 totalSamples += n
@@ -106,6 +128,14 @@ class WavSegmentRecorder(
             try { rec.stop() } catch (e: Exception) { /* already stopped */ }
             rec.release()
             seg?.let { finish(it) }
+        }
+    }
+
+    private fun reportError(message: String) {
+        try {
+            onRecorderError(message)
+        } catch (_: Exception) {
+            // A UI callback must never prevent the native recorder from being released.
         }
     }
 
@@ -167,5 +197,6 @@ class WavSegmentRecorder(
         private const val SILENCE_RMS = 450.0
         /** Quieter than the cut threshold, so soft speech still counts as speech. */
         private const val VOICE_RMS = 300.0
+        private const val MAX_CONSECUTIVE_READ_ERRORS = 10
     }
 }

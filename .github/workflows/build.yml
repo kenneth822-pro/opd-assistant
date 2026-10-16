@@ -40,6 +40,30 @@ jobs:
       - name: App governance unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
+      - name: Summarize failed test reports
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob
+          import os
+          import xml.etree.ElementTree as ET
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          with open(summary, "a", encoding="utf-8") as out:
+              for path in glob.glob("app/build/test-results/**/*.xml", recursive=True) + glob.glob("engine/build/test-results/**/*.xml", recursive=True):
+                  root = ET.parse(path).getroot()
+                  failures = list(root.findall(".//failure")) + list(root.findall(".//error"))
+                  if not failures:
+                      continue
+                  out.write(f"### {path}\n\n```text\n")
+                  for failure in failures:
+                      message = failure.get("message") or (failure.text or "").strip()
+                      out.write(message[:4000] + "\n")
+                      safe = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error file={path}::{safe[:4000]}")
+                  out.write("```\n")
+          PY
+
       - name: Build APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 

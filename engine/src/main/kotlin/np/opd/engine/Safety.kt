@@ -98,10 +98,10 @@ object Safety {
             if (existing == null || existing.severity < sev) out[msg] = SafetyFinding(sev, msg)
         }
 
-        when (val age = s.demographics.age) {
-            null -> add(Severity.BLOCKED, "Adult-only catalogue: record the patient's age before using this medicine.")
-            age < 18 -> add(Severity.BLOCKED, "Adult-only catalogue: age $age is under 18; paediatric dosing is not loaded.")
-            else -> Unit
+        val patientAge = s.demographics.age
+        when {
+            patientAge == null -> add(Severity.BLOCKED, "Adult-only catalogue: record the patient's age before using this medicine.")
+            patientAge < 18 -> add(Severity.BLOCKED, "Adult-only catalogue: age $patientAge is under 18; paediatric dosing is not loaded.")
         }
 
         val demo = s.demographics

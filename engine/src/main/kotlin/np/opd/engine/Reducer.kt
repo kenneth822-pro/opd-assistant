@@ -521,16 +521,16 @@ object Reducer {
 
     private fun eligibilityProblem(r: RegimenDef, s: CaseState, c: Catalogues): String? {
         val e = r.eligibility
+        val age = s.demographics.age
+        if (age == null) return "adult age not recorded; this catalogue has no paediatric dosing"
+        if (age < ADULT_MIN_AGE) return "adult-only protocol; age $age is below $ADULT_MIN_AGE"
         if (e.genders.isNotEmpty()) {
             val g = s.demographics.gender
             if (g == Gender.UNKNOWN) return "sex not recorded"
             if (g.name !in e.genders) return "only for " + e.genders.joinToString("/") { it.lowercase() }
         }
-        val age = s.demographics.age
-        if (age != null) {
-            e.minAge?.let { if (age < it) return "not for age below $it" }
-            e.maxAge?.let { if (age > it) return "not for age above $it" }
-        }
+        e.minAge?.let { if (age < it) return "not for age below $it" }
+        e.maxAge?.let { if (age > it) return "not for age above $it" }
         if (e.requiresAny.isNotEmpty()) {
             val ok = e.requiresAny.any { code -> code in s.comorbidities || s.problems.any { it.conditionCode == code } }
             if (!ok) return "only when " + e.requiresAny.joinToString(" or ") { c.comorbidities[it] ?: c.conditions[it]?.displayName ?: it } + " is present"
@@ -675,4 +675,6 @@ object Reducer {
         Disposition.REFERRAL -> "refer"
         Disposition.EMERGENCY_TRANSFER -> "emergency care / transfer"
     }
+
+    private const val ADULT_MIN_AGE = 18
 }

@@ -445,10 +445,29 @@ class EngineTest {
 
     @Test
     fun genderUnknownSkipsFemaleOnlyRegimen() {
-        val s = ai(CaseState(), LiveDelta(problems = listOf(problem("COND_UTI")), planCue = true))
+        val s = ai(start(40, null), LiveDelta(problems = listOf(problem("COND_UTI")), planCue = true))
         val uti = p(s, "COND_UTI")
         assertEquals("UTI-02", uti.suggestedRegimenId)
         assertTrue(uti.skipReasons.first().contains("sex not recorded"))
+    }
+
+    @Test
+    fun adultOnlyCatalogueBlocksUnknownAndPaediatricDosing() {
+        val unknown = ai(CaseState(), LiveDelta(problems = listOf(problem("COND_APD")), planCue = true))
+        val unknownApd = p(unknown, "COND_APD")
+        assertNull(unknownApd.suggestedRegimenId)
+        assertTrue(unknownApd.skipReasons.first().contains("adult age not recorded"))
+
+        val child = ai(start(12, Gender.MALE), LiveDelta(problems = listOf(problem("COND_APD")), planCue = true))
+        val childApd = p(child, "COND_APD")
+        assertNull(childApd.suggestedRegimenId)
+        assertTrue(childApd.skipReasons.first().contains("below 18"))
+    }
+
+    @Test
+    fun dictatedMedicineShowsAdultScopeBlockForChild() {
+        val s = ai(start(12, Gender.MALE), LiveDelta(dictatedItems = listOf(DictatedInput("paracetamol", 1.0, "OD", 1))))
+        assertTrue(s.dictated.single().findings.any { it.severity == Severity.BLOCKED && it.message.contains("under 18") })
     }
 
     @Test

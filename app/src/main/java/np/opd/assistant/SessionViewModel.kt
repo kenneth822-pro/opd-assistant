@@ -113,6 +113,7 @@ data class UiState(
     val consent: ConsentRecord = ConsentRecord(),
     val audioRetentionPolicy: AudioRetentionPolicy = AudioRetentionPolicy.DELETE_AFTER_CONSULTATION,
     val audioRetentionHours: Int = 24,
+    val audioStorageBytes: Long = 0L,
     val developerMode: Boolean = false,
     val privacySafePrompts: Boolean = true,
     val doctorIdentity: String = ""
@@ -230,6 +231,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         consent = settings.consent,
         audioRetentionPolicy = settings.audioRetentionPolicy,
         audioRetentionHours = settings.audioRetentionHours,
+        audioStorageBytes = audioStorageBytes(),
         developerMode = settings.developerMode,
         privacySafePrompts = settings.privacySafePrompts,
         doctorIdentity = settings.doctorIdentity
@@ -240,6 +242,11 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     /* ---------------- crash-safe persistence ---------------- */
 
     private fun sessionFile(): File = File(getApplication<Application>().filesDir, "last_session.json")
+
+    private fun audioStorageBytes(): Long = File(getApplication<Application>().filesDir, "sessions")
+        .walkTopDown()
+        .filter { it.isFile }
+        .sumOf { it.length() }
 
     /** Writes the current case + note + mode to disk (best-effort; never throws into the UI). */
     private fun saveSessionSnapshot() {
@@ -499,6 +506,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
             File(sessionFile().parentFile, ".${sessionFile().name}.tmp").delete()
         } catch (e: Exception) { /* nothing to delete */ }
         synchronized(segments) { segments.clear() }
+        refreshSettings()
         showMessage("All recorded audio deleted from this phone.")
     }
 
@@ -513,7 +521,10 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
     private fun deleteProcessedAudio(seg: Segment) {
         if (settings.audioRetentionPolicy == AudioRetentionPolicy.DELETE_AFTER_TRANSCRIPTION ||
             settings.audioRetentionPolicy == AudioRetentionPolicy.DELETE_IMMEDIATELY
-        ) seg.file.delete()
+        ) {
+            seg.file.delete()
+            refreshSettings()
+        }
     }
 
     private fun cleanupAudioAfterConsultation() {

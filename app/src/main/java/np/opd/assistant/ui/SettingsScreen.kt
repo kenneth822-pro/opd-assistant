@@ -158,6 +158,10 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
             Muted("This is stored locally and is required before a document can be marked doctor-confirmed.")
         }
         SectionCard("Audio retention") {
+            Text("Audio currently stored: ${formatBytes(st.audioStorageBytes)}", fontWeight = FontWeight.SemiBold)
+            if (st.audioStorageBytes > 250L * 1024L * 1024L) {
+                Text("Storage warning: recorded audio is using more than 250 MB. Delete it or choose a shorter retention policy.", color = Palette.urgentFg)
+            }
             AudioRetentionPolicy.entries.forEach { policy ->
                 RetentionOption(policy.label, when (policy) {
                     AudioRetentionPolicy.DELETE_AFTER_TRANSCRIPTION -> "Remove each segment after successful transcription."

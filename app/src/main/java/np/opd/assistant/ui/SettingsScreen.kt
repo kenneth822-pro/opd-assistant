@@ -143,6 +143,7 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.setConsent(consentExternal, consentLocal) }, enabled = consentExternal xor consentLocal) { Text("Save consent") }
                 if (st.consent.status == ConsentStatus.OBTAINED) TextButton(onClick = { vm.withdrawConsent() }) { Text("Withdraw") }
+                TextButton(onClick = { vm.declineConsent() }) { Text("Decline external processing") }
             }
         }
         SectionCard("Clinician identity for review records") {

@@ -187,6 +187,7 @@ private fun SetupScreen(st: UiState, vm: SessionViewModel) {
             SectionCard("Recording consent required", container = Palette.urgentBg) {
                 Text("Save a participant consent record in Settings before requesting microphone access. Choose external-AI or on-device-only processing.")
                 OutlinedButton(onClick = { vm.go(Screen.SETTINGS) }) { Text("Open privacy settings") }
+                OutlinedButton(onClick = { vm.startManualConsult() }) { Text("Use manual note without recording") }
             }
         }
         SectionCard("Clinical focus") {

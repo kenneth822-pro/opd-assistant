@@ -360,6 +360,12 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         showMessage("Recording consent withdrawn. Start a new consent record before recording.")
     }
 
+    fun declineConsent() {
+        settings.consent = ConsentRecord(status = ConsentStatus.DECLINED, timestampMs = System.currentTimeMillis())
+        refreshSettings()
+        showMessage("External recording consent declined. Manual notes remain available; no audio will be uploaded.")
+    }
+
     fun setDoctorIdentity(identity: String) {
         settings.doctorIdentity = identity
         refreshSettings()
@@ -667,6 +673,30 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = withSettings(UiState(screen = Screen.RECORDING, mode = mode, case = case, recording = true, hasSession = true))
         startWorkers()
         startTicker()
+    }
+
+    /** Starts a no-audio consultation so a person can write a local draft without consent to record. */
+    fun startManualConsult() {
+        val cat = catalogues ?: return showMessage("Clinical catalogues failed to load.")
+        File(getApplication<Application>().filesDir, "sessions").deleteRecursively()
+        val case = CaseState(
+            review = DoctorReview(
+                status = ReviewStatus.DOCTOR_REVIEW_REQUIRED,
+                timestampMs = System.currentTimeMillis(),
+                catalogueVersion = cat.version,
+                modelMetadata = "manual-only"
+            )
+        )
+        _ui.value = withSettings(
+            UiState(
+                screen = Screen.REVIEW,
+                mode = Mode.DICTATION,
+                case = case,
+                soap = Notes.localDraft(case, cat, LocalAssist.Hints()),
+                hasSession = true
+            )
+        )
+        saveSessionSnapshot()
     }
 
     /** Called on the recording thread whenever a segment file is closed. */

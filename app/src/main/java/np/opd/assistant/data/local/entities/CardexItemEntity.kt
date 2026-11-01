@@ -42,5 +42,9 @@ data class CardexItemEntity(
     /** True when the change came from a senior round and has passed the deterministic safety gate. */
     val safetyChecked: Boolean = false,
     val safetyNotes: String? = null,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    /** Offline-first sync metadata. */
+    val updatedAt: Long = 0L,
+    val isSynced: Boolean = false,
+    val deletedAt: Long? = null
 )

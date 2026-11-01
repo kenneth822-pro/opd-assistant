@@ -40,5 +40,9 @@ data class TaskEntity(
     val completedAt: Long? = null,
     /** Set when a round/consult created this task, so the source can be traced. */
     val sourceNote: String? = null,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    /** Offline-first sync metadata. */
+    val updatedAt: Long = 0L,
+    val isSynced: Boolean = false,
+    val deletedAt: Long? = null
 )

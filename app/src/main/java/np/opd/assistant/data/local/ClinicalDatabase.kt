@@ -9,16 +9,22 @@ import np.opd.assistant.data.local.dao.CardexDao
 import np.opd.assistant.data.local.dao.ConsultDao
 import np.opd.assistant.data.local.dao.DischargeDao
 import np.opd.assistant.data.local.dao.EncounterDao
+import np.opd.assistant.data.local.dao.FluidIoDao
 import np.opd.assistant.data.local.dao.MediaDao
+import np.opd.assistant.data.local.dao.OtScheduleDao
 import np.opd.assistant.data.local.dao.PatientDao
 import np.opd.assistant.data.local.dao.TaskDao
+import np.opd.assistant.data.local.dao.VitalsLogDao
 import np.opd.assistant.data.local.entities.CardexItemEntity
 import np.opd.assistant.data.local.entities.ConsultEntity
 import np.opd.assistant.data.local.entities.DischargeEntity
 import np.opd.assistant.data.local.entities.EncounterEntity
+import np.opd.assistant.data.local.entities.FluidIoEntity
 import np.opd.assistant.data.local.entities.MediaEntity
+import np.opd.assistant.data.local.entities.OtScheduleEntity
 import np.opd.assistant.data.local.entities.PatientEntity
 import np.opd.assistant.data.local.entities.TaskEntity
+import np.opd.assistant.data.local.entities.VitalsLogEntity
 
 /**
  * Local-first relational clinical database. This is the single source of truth for the ward /
@@ -33,9 +39,12 @@ import np.opd.assistant.data.local.entities.TaskEntity
         TaskEntity::class,
         MediaEntity::class,
         ConsultEntity::class,
-        DischargeEntity::class
+        DischargeEntity::class,
+        FluidIoEntity::class,
+        VitalsLogEntity::class,
+        OtScheduleEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -48,6 +57,9 @@ abstract class ClinicalDatabase : RoomDatabase() {
     abstract fun mediaDao(): MediaDao
     abstract fun consultDao(): ConsultDao
     abstract fun dischargeDao(): DischargeDao
+    abstract fun fluidIoDao(): FluidIoDao
+    abstract fun vitalsLogDao(): VitalsLogDao
+    abstract fun otScheduleDao(): OtScheduleDao
 
     companion object {
         const val DB_NAME = "clinical.db"

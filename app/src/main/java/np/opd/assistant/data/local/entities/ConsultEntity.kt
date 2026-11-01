@@ -37,5 +37,9 @@ data class ConsultEntity(
     val urgency: ConsultUrgency = ConsultUrgency.ROUTINE,
     val replyNotes: String? = null,
     val requestedAt: Long = 0L,
-    val repliedAt: Long? = null
+    val repliedAt: Long? = null,
+    /** Offline-first sync metadata. */
+    val updatedAt: Long = 0L,
+    val isSynced: Boolean = false,
+    val deletedAt: Long? = null
 )

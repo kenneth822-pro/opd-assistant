@@ -49,5 +49,9 @@ data class MediaEntity(
     val label: String? = null,
     val side: MediaSide = MediaSide.NA,
     /** True once a black-bar anonymisation pass has been applied. */
-    val anonymised: Boolean = false
+    val anonymised: Boolean = false,
+    /** Offline-first sync metadata. */
+    val updatedAt: Long = 0L,
+    val isSynced: Boolean = false,
+    val deletedAt: Long? = null
 )

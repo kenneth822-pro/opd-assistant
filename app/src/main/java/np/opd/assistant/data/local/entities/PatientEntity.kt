@@ -44,5 +44,8 @@ data class PatientEntity(
     val bedNumber: String = "",
     val status: PatientStatus = PatientStatus.ACTIVE,
     val createdAt: Long = 0L,
-    val updatedAt: Long = 0L
+    val updatedAt: Long = 0L,
+    /** Offline-first sync metadata. */
+    val isSynced: Boolean = false,
+    val deletedAt: Long? = null
 )

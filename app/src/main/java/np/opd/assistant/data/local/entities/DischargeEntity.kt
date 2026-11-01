@@ -55,5 +55,8 @@ data class DischargeEntity(
     val renderedText: String = "",
     val renderedMarkdown: String = "",
     val createdAt: Long = 0L,
-    val updatedAt: Long = 0L
+    val updatedAt: Long = 0L,
+    /** Offline-first sync metadata. */
+    val isSynced: Boolean = false,
+    val deletedAt: Long? = null
 )

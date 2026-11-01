@@ -29,6 +29,9 @@ class WardRepository(private val db: ClinicalDatabase) {
     val mediaDao get() = db.mediaDao()
     val consultDao get() = db.consultDao()
     val dischargeDao get() = db.dischargeDao()
+    val fluidIoDao get() = db.fluidIoDao()
+    val vitalsLogDao get() = db.vitalsLogDao()
+    val otScheduleDao get() = db.otScheduleDao()
 
     // ---- reads ----
 

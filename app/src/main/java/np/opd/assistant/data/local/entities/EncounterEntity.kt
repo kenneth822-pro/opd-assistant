@@ -43,5 +43,9 @@ data class EncounterEntity(
     val dischargeDatetime: Long? = null,
     val unit: ServiceUnit = ServiceUnit.UNIT_1,
     val consultantName: String = "",
-    val finalDiagnosis: String? = null
+    val finalDiagnosis: String? = null,
+    /** Offline-first sync metadata. */
+    val updatedAt: Long = 0L,
+    val isSynced: Boolean = false,
+    val deletedAt: Long? = null
 )

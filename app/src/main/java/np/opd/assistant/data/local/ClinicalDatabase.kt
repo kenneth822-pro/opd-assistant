@@ -7,12 +7,14 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import np.opd.assistant.data.local.dao.CardexDao
 import np.opd.assistant.data.local.dao.ConsultDao
+import np.opd.assistant.data.local.dao.DischargeDao
 import np.opd.assistant.data.local.dao.EncounterDao
 import np.opd.assistant.data.local.dao.MediaDao
 import np.opd.assistant.data.local.dao.PatientDao
 import np.opd.assistant.data.local.dao.TaskDao
 import np.opd.assistant.data.local.entities.CardexItemEntity
 import np.opd.assistant.data.local.entities.ConsultEntity
+import np.opd.assistant.data.local.entities.DischargeEntity
 import np.opd.assistant.data.local.entities.EncounterEntity
 import np.opd.assistant.data.local.entities.MediaEntity
 import np.opd.assistant.data.local.entities.PatientEntity
@@ -30,9 +32,10 @@ import np.opd.assistant.data.local.entities.TaskEntity
         CardexItemEntity::class,
         TaskEntity::class,
         MediaEntity::class,
-        ConsultEntity::class
+        ConsultEntity::class,
+        DischargeEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -44,6 +47,7 @@ abstract class ClinicalDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun mediaDao(): MediaDao
     abstract fun consultDao(): ConsultDao
+    abstract fun dischargeDao(): DischargeDao
 
     companion object {
         const val DB_NAME = "clinical.db"
@@ -59,7 +63,8 @@ abstract class ClinicalDatabase : RoomDatabase() {
         private fun build(context: Context): ClinicalDatabase =
             Room.databaseBuilder(context, ClinicalDatabase::class.java, DB_NAME)
                 // No destructive migration: schema changes must ship an explicit Migration so ward
-                // records are never silently dropped. Add migrations in a later phase.
+                // records are never silently dropped.
+                .addMigrations(*Migrations.ALL)
                 .build()
     }
 }

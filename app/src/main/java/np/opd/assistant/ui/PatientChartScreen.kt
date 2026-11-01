@@ -25,10 +25,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import np.opd.engine.ChangeAction
 import np.opd.engine.DiffItem
 import np.opd.engine.OrderKind
 import np.opd.engine.Severity
+import np.opd.assistant.ward.DischargeViewModel
 import np.opd.assistant.ward.RoundViewModel
 import np.opd.assistant.ward.WardViewModel
 
@@ -114,8 +116,16 @@ fun PatientChartScreen(
             ChartTab.MEDIA -> SectionCard("Imaging & Media") {
                 Muted("Wound photos, X-ray/CT view-box captures and a healing comparison slider arrive in Phase 5.")
             }
-            ChartTab.DISCHARGE -> SectionCard("Discharge Planner") {
-                Muted("ER and inpatient discharge summaries with PC export are built in Phase 4.")
+            ChartTab.DISCHARGE -> {
+                val dischargeVm: DischargeViewModel = viewModel()
+                androidx.compose.runtime.LaunchedEffect(patientId, activeEncounter?.id) {
+                    activeEncounter?.let { dischargeVm.load(patientId, it.id) }
+                }
+                if (activeEncounter == null) {
+                    SectionCard("Discharge Planner") { Muted("No open admission for this patient.") }
+                } else {
+                    DischargeScreen(dischargeVm)
+                }
             }
         }
     }

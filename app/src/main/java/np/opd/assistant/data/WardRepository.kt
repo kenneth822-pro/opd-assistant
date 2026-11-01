@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import np.opd.assistant.data.local.ClinicalDatabase
 import np.opd.assistant.data.local.entities.CardexItemEntity
 import np.opd.assistant.data.local.entities.ConsultEntity
+import np.opd.assistant.data.local.entities.DischargeEntity
 import np.opd.assistant.data.local.entities.EncounterEntity
 import np.opd.assistant.data.local.entities.EncounterType
 import np.opd.assistant.data.local.entities.MediaEntity
@@ -27,6 +28,7 @@ class WardRepository(private val db: ClinicalDatabase) {
     val taskDao get() = db.taskDao()
     val mediaDao get() = db.mediaDao()
     val consultDao get() = db.consultDao()
+    val dischargeDao get() = db.dischargeDao()
 
     // ---- reads ----
 
@@ -122,4 +124,10 @@ class WardRepository(private val db: ClinicalDatabase) {
     suspend fun completeTask(id: String) = taskDao.complete(id, System.currentTimeMillis())
 
     suspend fun upsertConsult(consult: ConsultEntity) = consultDao.upsert(consult)
+
+    // ---- discharges ----
+
+    fun observeDischarges(patientId: String): Flow<List<DischargeEntity>> = dischargeDao.observeForPatient(patientId)
+    suspend fun latestDischarge(encounterId: String): DischargeEntity? = dischargeDao.latestForEncounter(encounterId)
+    suspend fun upsertDischarge(discharge: DischargeEntity) = dischargeDao.upsert(discharge)
 }

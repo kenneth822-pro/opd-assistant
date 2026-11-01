@@ -3,6 +3,8 @@ package np.opd.assistant.data.local
 import androidx.room.TypeConverter
 import np.opd.assistant.data.local.entities.ConsultStatus
 import np.opd.assistant.data.local.entities.ConsultUrgency
+import np.opd.assistant.data.local.entities.DischargeKind
+import np.opd.assistant.data.local.entities.DischargeStatus
 import np.opd.assistant.data.local.entities.EncounterType
 import np.opd.assistant.data.local.entities.MediaCategory
 import np.opd.assistant.data.local.entities.MediaSide
@@ -52,6 +54,12 @@ class Converters {
 
     @TypeConverter fun consultUrgencyToString(v: ConsultUrgency): String = v.name
     @TypeConverter fun stringToConsultUrgency(v: String): ConsultUrgency = enumOrDefault(v, ConsultUrgency.ROUTINE)
+
+    @TypeConverter fun dischargeKindToString(v: DischargeKind): String = v.name
+    @TypeConverter fun stringToDischargeKind(v: String): DischargeKind = enumOrDefault(v, DischargeKind.INPATIENT)
+
+    @TypeConverter fun dischargeStatusToString(v: DischargeStatus): String = v.name
+    @TypeConverter fun stringToDischargeStatus(v: String): DischargeStatus = enumOrDefault(v, DischargeStatus.DRAFT)
 
     private inline fun <reified T : Enum<T>> enumOrDefault(value: String, default: T): T =
         enumValues<T>().firstOrNull { it.name == value } ?: default

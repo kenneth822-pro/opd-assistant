@@ -845,4 +845,103 @@ class EngineTest {
         assertTrue(c.drugs.containsKey("DRUG_PERMETHRIN"))
         assertTrue(c.drugs.containsKey("DRUG_CLOTRIMAZOLE"))
     }
+
+    /* ---------------- NEWS2 deterioration engine ---------------- */
+
+    @Test
+    fun news2NormalScoreZero() {
+        val r = News2.score(
+            News2.Parameters(
+                respirationRate = 16, spo2Scale1 = 98, onSupplementalOxygen = false,
+                systolicBp = 120, pulse = 70, consciousness = News2.ConsciousnessLevel.ALERT,
+                temperatureF = 98.6
+            )
+        )
+        assertEquals(0, r.totalScore)
+        assertEquals(News2.RiskLevel.LOW, r.riskLevel)
+        assertFalse(r.hasSingleParameterRedFlag)
+        assertTrue(r.missingParameters.isEmpty())
+        assertEquals(0, r.breakdown["respiration_rate"])
+        assertEquals(0, r.breakdown["spo2_scale1"])
+        assertEquals(0, r.breakdown["supplemental_oxygen"])
+    }
+
+    @Test
+    fun news2HypoxiaAndOxygenEscalation() {
+        // SpO2 90 -> 3, on oxygen -> +2; RR 24 -> 2. SBP/pulse/temp normal. Total 7 => HIGH.
+        val r = News2.score(
+            News2.Parameters(
+                respirationRate = 24, spo2Scale1 = 90, onSupplementalOxygen = true,
+                systolicBp = 120, pulse = 70,
+                consciousness = News2.ConsciousnessLevel.ALERT, temperatureF = 98.6
+            )
+        )
+        assertEquals(3, r.breakdown["spo2_scale1"])
+        assertEquals(2, r.breakdown["supplemental_oxygen"])
+        assertEquals(2, r.breakdown["respiration_rate"])
+        assertEquals(7, r.totalScore)
+        assertEquals(News2.RiskLevel.HIGH, r.riskLevel)
+        assertTrue(r.hasSingleParameterRedFlag)
+    }
+
+    @Test
+    fun news2IndividualRedFlagLevel() {
+        // Only one parameter is abnormal but scores 3 (systolic 88). Total 3, so risk is LOW_MEDIUM.
+        val r = News2.score(
+            News2.Parameters(
+                respirationRate = 16, spo2Scale1 = 97, systolicBp = 88, pulse = 70,
+                consciousness = News2.ConsciousnessLevel.ALERT, temperatureF = 98.6
+            )
+        )
+        assertEquals(3, r.breakdown["systolic_bp"])
+        assertEquals(3, r.totalScore)
+        assertTrue(r.hasSingleParameterRedFlag)
+        assertEquals(News2.RiskLevel.LOW_MEDIUM, r.riskLevel)
+    }
+
+    @Test
+    fun news2SepticShockHighAlert() {
+        // RR 30 (3), SpO2 90 (3), oxygen (2), SBP 85 (3), pulse 135 (3), new confusion (3) => HIGH.
+        val r = News2.score(
+            News2.Parameters(
+                respirationRate = 30, spo2Scale1 = 90, onSupplementalOxygen = true,
+                systolicBp = 85, pulse = 135,
+                consciousness = News2.ConsciousnessLevel.NEW_CONFUSION, temperatureF = 102.2
+            )
+        )
+        assertEquals(3, r.breakdown["respiration_rate"])
+        assertEquals(3, r.breakdown["systolic_bp"])
+        assertEquals(3, r.breakdown["pulse"])
+        assertEquals(3, r.breakdown["consciousness"])
+        assertTrue(r.totalScore >= 7)
+        assertEquals(News2.RiskLevel.HIGH, r.riskLevel)
+        assertEquals(News2.actionFor(News2.RiskLevel.HIGH), r.clinicalAction)
+    }
+
+    @Test
+    fun news2MissingParametersAreReportedNotSilent() {
+        // Only pulse supplied: the score is a floor and the missing set is explicit.
+        val r = News2.score(News2.Parameters(pulse = 70))
+        assertEquals(0, r.totalScore)
+        assertTrue(r.missingParameters.contains("respiration_rate"))
+        assertTrue(r.missingParameters.contains("spo2"))
+        assertTrue(r.missingParameters.contains("systolic_bp"))
+        assertTrue(r.missingParameters.contains("temperature"))
+    }
+
+    @Test
+    fun news2HypercapnicScaleUsedWhenProvided() {
+        // SpO2 97 on the hypercapnic scale scores 3 (penalty for being above target on air).
+        val r = News2.score(News2.Parameters(spo2Scale2Hypercapnic = 97))
+        assertEquals(3, r.breakdown["spo2_scale2"])
+        assertTrue(r.hasSingleParameterRedFlag)
+    }
+
+    @Test
+    fun news2TemperatureConversion() {
+        assertEquals(37.0, News2.fahrenheitToCelsius(98.6), 0.001)
+        assertEquals(1, News2.scoreTemperatureC(35.6))
+        assertEquals(0, News2.scoreTemperatureC(37.0))
+        assertEquals(2, News2.scoreTemperatureC(39.5))
+    }
 }

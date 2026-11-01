@@ -93,7 +93,8 @@ class WardCensusTest {
     fun promptsDoNotAskForInventedData() {
         val ask = WardPrompts.askWardSystemPrompt()
         val handover = WardPrompts.handoverSystemPrompt()
-        assertTrue(ask.contains("ONLY the data"))
+        assertTrue(ask.contains("ONLY"))
+        assertTrue(ask.contains("data in the snapshot"))
         assertTrue(ask.contains("Do not invent"))
         assertTrue(handover.contains("Do not invent"))
     }

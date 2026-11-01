@@ -31,7 +31,7 @@ interface PatientDao {
         SELECT * FROM patients
         WHERE status = :status
         ORDER BY
-            CASE current_ward
+            CASE currentWard
                 WHEN 'ICU' THEN 0
                 WHEN 'SEMI_ICU' THEN 1
                 WHEN 'BUFFER' THEN 2
@@ -39,18 +39,18 @@ interface PatientDao {
                 WHEN 'WARD_2' THEN 4
                 ELSE 5
             END,
-            bed_number
+            bedNumber
         """
     )
     fun observeCensus(status: PatientStatus = PatientStatus.ACTIVE): Flow<List<PatientEntity>>
 
-    @Query("SELECT * FROM patients WHERE current_ward = :ward AND status = :status ORDER BY bed_number")
+    @Query("SELECT * FROM patients WHERE currentWard = :ward AND status = :status ORDER BY bedNumber")
     fun observeByWard(ward: WardUnit, status: PatientStatus = PatientStatus.ACTIVE): Flow<List<PatientEntity>>
 
     @Query("SELECT COUNT(*) FROM patients WHERE status = :status")
     fun observeActiveCount(status: PatientStatus = PatientStatus.ACTIVE): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM patients WHERE current_ward IN ('ICU', 'SEMI_ICU') AND status = :status")
+    @Query("SELECT COUNT(*) FROM patients WHERE currentWard IN ('ICU', 'SEMI_ICU') AND status = :status")
     fun observeCriticalCount(status: PatientStatus = PatientStatus.ACTIVE): Flow<Int>
 
     @Query(
@@ -59,7 +59,7 @@ interface PatientDao {
         WHERE status = 'ACTIVE' AND (
             name LIKE '%' || :query || '%' OR (mrn IS NOT NULL AND mrn LIKE '%' || :query || '%')
         )
-        ORDER BY bed_number
+        ORDER BY bedNumber
         """
     )
     suspend fun search(query: String): List<PatientEntity>

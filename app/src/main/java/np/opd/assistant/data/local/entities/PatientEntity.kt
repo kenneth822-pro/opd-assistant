@@ -32,7 +32,7 @@ enum class PatientStatus {
  */
 @Entity(
     tableName = "patients",
-    indices = [Index(value = ["mrn"], unique = false), Index("current_ward")]
+    indices = [Index(value = ["mrn"], unique = false), Index("currentWard")]
 )
 data class PatientEntity(
     @PrimaryKey val id: String,

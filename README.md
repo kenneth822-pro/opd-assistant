@@ -1,12 +1,19 @@
-# OPD Assistant (prototype)
+# OPD Assistant — Clinical Operating System (prototype)
 
-An Android app that listens to an outpatient consultation, writes a draft note, and suggests
-protocol medicines **only after deterministic safety checks**. Built for internal testing with
-**role-played / simulated consultations only**.
+An Android app that covers the hospital ward workflow end to end: it listens to a consultation,
+writes a draft note, and suggests protocol medicines **only after deterministic safety checks**;
+it also runs the **inpatient workspace** — a ward census board, senior-round capture with a cardex
+diff, ER/inpatient discharge summaries, a bedside media vault, and shift handover with ward-wide
+queries. Built for internal testing with **role-played / simulated consultations only**.
 
 > ⚠ **Prototype.** Every regimen, dose, interaction rule and brand name in this repository is
 > **UNVERIFIED** placeholder content. Do not use with real patients until a clinician has checked
 > the catalogues against current MoHP Nepal guidance and consent, privacy and ethics steps are in place.
+
+The design keeps a strict split: the **`:engine`** module holds every deterministic clinical rule and
+all clinical content (pure Kotlin, no AI, no Android), and the **`:app`** module is the Android UI
+that talks to AI providers and a local-first Room database. The AI only ever *reports what was said*;
+choosing drugs, dosing and all safety decisions stay in the engine (see §4, §5).
 
 ---
 
@@ -98,6 +105,44 @@ Tap **Test selected models** to check all three. Keys are encrypted on the phone
 
 Tips: say vitals aloud ("BP 150 by 95, SpO2 96"), say exam findings aloud, and say "अब औषधि लेखिदिन्छु" when moving to treatment.
 
+## 3b. Run the ward / inpatient workspace
+
+Open **Ward / Inpatient board** from Home. The ward data lives in an on-device Room database
+(`clinical.db`); the OPD consultation flow is separate and unchanged.
+
+**Ward census board**
+- Metric strip: **Inpatients**, **ICU / HDU**, **Open tasks**, **Consults**.
+- Ward tabs: All / 1st Ward / 2nd Ward / Buffer / Semi-ICU / ICU; filter chips for service **unit**
+  and **My patients**.
+- Colour-coded bed cards with quick-triage chips (Ventilated, HDU, Elderly), a free-bed row, and a
+  fast **+ Admit** form (name required; MRN, age, sex, ward, bed, unit, consultant optional).
+  Admission checklist bundles (pre-op elective, emergency abdomen, trauma/neurosurgery, general
+  medical) are defined in `AdmissionChecklistPreset`.
+
+**Patient chart** (tap a bed card) — six tabs:
+- **Summary / Vitals**, **Cardex** (the live treatment sheet), **Senior Rounds**, **To-Do & Orders**,
+  **Imaging & Media**, **Discharge Planner**.
+
+**Senior rounds (voice → cardex diff)** — Rounds tab → **Start round recording**; speak the
+consultant's instructions; **Stop**. The app extracts the changes, runs the deterministic safety
+engine on every new medicine, and shows a review dialog with **Add / Stop / Adjust / Lab / Nursing /
+Diet / Consult** chips. Blocked medicines are pre-skipped and can only be included deliberately.
+Approve commits START/STOP to the cardex and creates tasks/consults.
+
+**Discharge** — Discharge tab: pick **ER** or **Inpatient**, fill the form (prefilled from the ward
+data and active cardex), then **Save**. **Copy for PC** puts clean, terminal-EMR-safe plain text on
+the clipboard; **Share** uses the system sheet; **Copy markdown** gives a printable version.
+
+**Media vault** — Media tab: **📷 Capture** writes a photo to app-private storage
+(`files/patients/{id}/media`) via a FileProvider — never the public gallery — then tags it
+(Wound / X-Ray / CT / MRI / US / ECG / Lab / Chart, with side and label). **Compare wounds** shows a
+draggable before/after slider across post-op photos; the viewer can make a best-effort
+**black-bar anonymised copy** before sharing.
+
+**Ask the Ward** — **Ask** on the ward board: type a question ("Which Semi-ICU patients have Hb < 8?")
+and the notes model answers from a census snapshot, or tap **SBAR handover** for a shift handover.
+A deterministic offline SBAR is always shown as a fallback.
+
 ## 4. How it works
 
 ```
@@ -132,16 +177,29 @@ Key safety rules (all enforced in code and covered by tests):
 - Unknown is never treated as safe (e.g. unknown pregnancy status blocks teratogenic drugs; unassessed CRB-65 items are shown; unknown/under-18 age blocks this adult-only catalogue).
 - Measured red flags (RR, SpO2, BP) are confirmed only by numbers, and a later normal reading never silently clears them.
 
+The ward workflow reuses the same safety engine. A senior-round recording is turned into a proposed
+cardex diff (`VerbalOrders.diff`), and each new medicine is run through the **same** `Safety.evaluate`
+(allergy / pregnancy / kidney / age / interaction / cumulative-paracetamol) before it can be added.
+Discharge text and the ward census snapshot are produced by pure formatters (`DischargeFormat`,
+`WardCensus`) so they are reproducible and testable; the "Ask the Ward" model reads the snapshot only.
+
 ## 5. Repository layout
 
 | Path | What it is |
 |---|---|
 | `engine/src/main/resources/catalogues/v1/` | **All clinical content** (conditions, red flags, regimens, formulary, interactions). Review these JSON files clinically. |
-| `engine/src/main/kotlin/` | Safety engine: reducer, safety checks, Nepali instruction templates, prompt + schema builder. No dependencies. |
-| `engine/src/test/kotlin/` | 62 tests incl. catalogue integrity, keyword hints with Nepali negation, adult-only dosing guards, persistence round-trips, and a randomized "AI can never loosen safety" check. |
-| `app/` | Android app (Kotlin + Jetpack Compose). |
+| `engine/src/main/kotlin/` | Safety engine: reducer, safety checks, Nepali instruction templates, prompt + schema builder, verbal-order/cardex diff, discharge formatter, ward census/SBAR. No dependencies. |
+| `engine/src/test/kotlin/` | Engine tests incl. catalogue integrity, keyword hints with Nepali negation, adult-only dosing guards, persistence round-trips, a randomized "AI can never loosen safety" check, verbal-order/cardex-diff, discharge formatting and ward SBAR. |
+| `app/` | Android app (Kotlin + Jetpack Compose). OPD flow + ward workspace. |
+| `app/src/main/java/np/opd/assistant/data/` | Room database: entities (`patients`, `encounters`, `cardex_items`, `patient_tasks`, `patient_media`, `consult_requests`, `discharges`), DAOs, converters, migrations, repository, media store. |
+| `app/src/main/java/np/opd/assistant/ward/` | Ward view models (census, rounds, discharge, media, AI queries) and admission presets. |
 | `.github/workflows/build.yml` | Runs the tests, builds the APK, publishes it as a Release. |
 | `app/src/main/res/xml/network_security_config.xml` | Cleartext-blocked Android network policy; HTTPS is the default. |
+| `app/src/main/res/xml/file_paths.xml` | FileProvider paths for patient media (camera capture, no gallery exposure). |
+
+The local-first database is the single source of truth for the ward workspace. Schema changes ship
+an explicit Room `Migration` (never a destructive migration), so ward and discharge records are
+never silently dropped.
 
 ## 6. Known limitations of this prototype
 
@@ -150,8 +208,11 @@ Key safety rules (all enforced in code and covered by tests):
   restart attempt. Verify this on the target phone.
 - Consultation snapshots and configured retention metadata are stored locally; audio cleanup is
   policy-driven and can be forced from Settings. Do not treat the local snapshot as a patient record.
-- No PDF / thermal printing yet. Text sharing is implemented but blocked until catalogue approval
-  evidence and doctor sign-off exist.
+- The ward workspace is **local-only** and single-device; there is no server sync or multi-user
+  access control yet. Treat `clinical.db` as prototype data, not a system of record.
+- Media anonymisation is a **best-effort** black-bar band, not a guarantee; always check before sharing.
+- No PDF / thermal printing yet. Text sharing is implemented for discharge and handover; OPD text
+  sharing is blocked until catalogue approval evidence and doctor sign-off exist.
 - Speaker labels come from the AI and can be wrong (Whisper gives none; the notes model infers them).
 - Free model tiers have daily limits; a 10-minute live consultation uses roughly 40-80 requests.
 - The catalogue covers 20 adult OPD conditions. Children, pregnancy-specific care and emergencies are out of scope; age is now required before a protocol regimen can be suggested.

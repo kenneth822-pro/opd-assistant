@@ -39,7 +39,7 @@ import np.opd.assistant.ward.WardViewModel
 private const val BEDS_PER_WARD = 12
 
 @Composable
-fun WardScreen(wardVm: WardViewModel, onBack: () -> Unit, onOpenPatient: (String) -> Unit) {
+fun WardScreen(wardVm: WardViewModel, onBack: () -> Unit, onOpenPatient: (String) -> Unit, onAskWard: () -> Unit) {
     val state by wardVm.ui.collectAsStateWithLifecycle()
     var showAdmit by remember { mutableStateOf(false) }
     BackHandler { onBack() }
@@ -59,6 +59,7 @@ fun WardScreen(wardVm: WardViewModel, onBack: () -> Unit, onOpenPatient: (String
         title = "Ward Board",
         onBack = onBack,
         actions = {
+            TextButton(onClick = onAskWard) { Text("Ask") }
             TextButton(onClick = { showAdmit = true }) { Text("+ Admit") }
         }
     ) {

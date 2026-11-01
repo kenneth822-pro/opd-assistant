@@ -57,7 +57,7 @@ data class DischargeUiState(
             kind = if (kind == DischargeKind.ER) DischargeFormat.Kind.ER else DischargeFormat.Kind.INPATIENT,
             patientName = patient?.name ?: "",
             age = patient?.age,
-            sex = patient?.gender.lowercase().replaceFirstChar { it.uppercase() },
+            sex = patient?.gender?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "",
             mrn = patient?.mrn,
             ward = ward,
             bed = bed,

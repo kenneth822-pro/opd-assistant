@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Patient media is written to app-private storage under files/patients/{id}/media/.
+         It is exposed to the system camera app only through this FileProvider, never to the
+         public gallery. -->
+    <files-path name="patient_media" path="patients/" />
+    <cache-path name="capture_cache" path="captures/" />
+</paths>

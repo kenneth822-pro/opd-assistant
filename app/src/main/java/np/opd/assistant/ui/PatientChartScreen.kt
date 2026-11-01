@@ -113,8 +113,10 @@ fun PatientChartScreen(
             ChartTab.TODO -> SectionCard("To-Do & Orders") {
                 Muted("STAT tasks, pending labs and unaddressed findings will be tracked here (Phase 4).")
             }
-            ChartTab.MEDIA -> SectionCard("Imaging & Media") {
-                Muted("Wound photos, X-ray/CT view-box captures and a healing comparison slider arrive in Phase 5.")
+            ChartTab.MEDIA -> {
+                val mediaVm: np.opd.assistant.ward.MediaViewModel = viewModel()
+                androidx.compose.runtime.LaunchedEffect(patientId) { mediaVm.load(patientId) }
+                MediaVaultScreen(mediaVm)
             }
             ChartTab.DISCHARGE -> {
                 val dischargeVm: DischargeViewModel = viewModel()

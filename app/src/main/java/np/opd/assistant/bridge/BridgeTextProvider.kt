@@ -56,7 +56,7 @@ class BridgeTextProvider(private val repository: WardRepository) {
                     consultant = enc?.consultantName ?: "",
                     admissionDate = enc?.admissionDatetime?.takeIf { it > 0 }?.let { fmt.format(Date(it)) } ?: "",
                     dischargeDate = fmt.format(Date()),
-                    homeMedications = cardex.map { DischargeFormat.DischargeMed(name = it.brandStated, dose = it.doseCount?.let(::count), route = if (it.route.name == "OTHER") "" else it.route.name, frequency = it.frequency) }
+                    homeMedications = cardex.map { DischargeFormat.DischargeMed(name = it.brandStated, dose = it.doseCount?.let(::count) ?: "", route = if (it.route.name == "OTHER") "" else it.route.name, frequency = it.frequency) }
                 )
                 DischargeFormat.plainText(input)
             }

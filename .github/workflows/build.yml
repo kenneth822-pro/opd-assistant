@@ -67,6 +67,19 @@ jobs:
       - name: Build APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
+      - name: Commit and push Room schemas
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f app/schemas/
+          if git diff --staged --quiet; then
+            echo "No Room schema changes detected."
+          else
+            git commit -m "chore(db): update Room export schemas [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
       - name: Name the APK
         run: |
           mkdir -p dist

@@ -273,7 +273,8 @@ class RoundViewModel(app: Application) : AndroidViewModel(app) {
                             )
                         }
                         item.kind == OrderKind.MED && item.action == ChangeAction.STOP && item.targetLineId != null -> {
-                            repository.stopCardex(item.targetLineId)
+                            val target = item.targetLineId
+                            if (target != null) repository.stopCardex(target)
                         }
                         item.kind == OrderKind.INVESTIGATION -> addTask(pid, encId, item.label, TaskCategory.LAB, now)
                         item.kind == OrderKind.NURSING -> addTask(pid, encId, item.label, TaskCategory.NURSING, now)

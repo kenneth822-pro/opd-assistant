@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:name=".OpdApplication"
         android:allowBackup="false"
         android:icon="@android:drawable/ic_btn_speak_now"
         android:label="OPD Assistant (prototype)"

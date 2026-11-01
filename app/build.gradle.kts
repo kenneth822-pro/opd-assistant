@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
 }
 
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
@@ -85,6 +86,13 @@ android {
     }
 }
 
+// Room schema history (checked in under app/schemas) so migrations can be reviewed and tested.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.incremental", "true")
+    arg("room.generateKotlin", "true")
+}
+
 dependencies {
     implementation(project(":engine"))
 
@@ -111,5 +119,13 @@ dependencies {
     // Apache Commons Compress for tar.bz2 extraction
     implementation("org.apache.commons:commons-compress:1.26.1")
 
+    // Room (local-first relational clinical database)
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
+
     testImplementation("junit:junit:4.13.2")
+    // Room schema export + in-memory migration testing are JVM-friendly.
+    androidTestImplementation("androidx.room:room-testing:$roomVersion")
 }

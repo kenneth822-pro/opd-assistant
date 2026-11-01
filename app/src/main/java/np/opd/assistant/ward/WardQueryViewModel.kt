@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,11 +75,11 @@ class WardQueryViewModel(app: Application) : AndroidViewModel(app) {
         // search("") matches every active patient (the query already filters status = 'ACTIVE').
         val active = repository.patientDao.search("")
         val rows = active.map { p ->
-            val encounters = kotlinx.coroutines.flow.first(repository.encounterDao.observeForPatient(p.id))
+            val encounters = repository.encounterDao.observeForPatient(p.id).first()
             val enc = encounters.firstOrNull { it.dischargeDatetime == null } ?: encounters.firstOrNull()
             val cardex = if (enc != null) repository.cardexDao.activeForPatient(p.id) else emptyList()
-            val tasks = if (enc != null) kotlinx.coroutines.flow.first(repository.taskDao.observeForEncounter(enc.id)) else emptyList()
-            val consults = if (enc != null) kotlinx.coroutines.flow.first(repository.consultDao.observeForEncounter(enc.id)) else emptyList()
+            val tasks = if (enc != null) repository.taskDao.observeForEncounter(enc.id).first() else emptyList()
+            val consults = if (enc != null) repository.consultDao.observeForEncounter(enc.id).first() else emptyList()
             CensusPatient(
                 patientId = p.id,
                 name = p.name,

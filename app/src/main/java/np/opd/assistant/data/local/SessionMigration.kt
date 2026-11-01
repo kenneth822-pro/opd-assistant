@@ -32,7 +32,12 @@ object SessionMigration {
      * guard in the old `loadSessionSnapshot`.
      */
     fun fromLegacyJson(json: String, nowMs: Long = System.currentTimeMillis()): Migrated? {
-        val root = J.parse(json) as? J.Obj ?: return null
+        val root = try {
+            J.parse(json) as? J.Obj
+        } catch (e: Exception) {
+            // Malformed legacy snapshots are simply "nothing to migrate", never a crash.
+            return null
+        } ?: return null
         val caseObj = root.obj("case") ?: return null
         val case = CaseState.fromJ(caseObj)
         if (case.tick <= 0) return null

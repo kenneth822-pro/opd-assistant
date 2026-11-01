@@ -70,11 +70,13 @@ object PrivacySafeText {
     private val phone = Regex("(?<!\\d)(?:\\+?977[- ]?)?9\\d{9}(?!\\d)")
     private val email = Regex("[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", RegexOption.IGNORE_CASE)
     private val labelledIdentifier = Regex(
-        "(?im)^(\\s*(?:patient\\s+name|name|नाम|फोन|phone|mobile|address|ठेगाना)\\s*[:=-]).*$"
+        "(?im)^(\\s*(?:patient\\s+name|name|नाम|address|ठेगाना)\\s*[:=-]).*$"
     )
 
     fun redact(text: String): String = text
-        .replace(labelledIdentifier) { "${it.groupValues[1]} [REDACTED]" }
+        // Phone and email run first so a "Phone:"/"Email:" line keeps its specific marker
+        // instead of being swallowed by the generic labelled-identifier rule below.
         .replace(phone, "[PHONE]")
         .replace(email, "[EMAIL]")
+        .replace(labelledIdentifier) { "${it.groupValues[1]} [REDACTED]" }
 }

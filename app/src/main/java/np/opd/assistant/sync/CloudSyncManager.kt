@@ -136,61 +136,61 @@ class CloudSyncManager(
         // patients
         runBlockingList { repository.patientDao.unsynced() }.forEach { p ->
             upsert(cfg, SyncTables.PATIENTS, p.id, patientJson(p))?.let { applied ->
-                if (applied) { repository.patientDao.markSynced(listOf(p.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.patientDao.markSynced(listOf(p.id)) }; pushed++ } else conflicts++
             }
         }
         // encounters
         runBlockingList { repository.encounterDao.unsynced() }.forEach { e ->
             upsert(cfg, SyncTables.ENCOUNTERS, e.id, encounterJson(e))?.let { applied ->
-                if (applied) { repository.encounterDao.markSynced(listOf(e.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.encounterDao.markSynced(listOf(e.id)) }; pushed++ } else conflicts++
             }
         }
         // cardex
         runBlockingList { repository.cardexDao.unsynced() }.forEach { c ->
             upsert(cfg, SyncTables.CARDEX, c.id, cardexJson(c))?.let { applied ->
-                if (applied) { repository.cardexDao.markSynced(listOf(c.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.cardexDao.markSynced(listOf(c.id)) }; pushed++ } else conflicts++
             }
         }
         // tasks
         runBlockingList { repository.taskDao.unsynced() }.forEach { t ->
             upsert(cfg, SyncTables.TASKS, t.id, taskJson(t))?.let { applied ->
-                if (applied) { repository.taskDao.markSynced(listOf(t.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.taskDao.markSynced(listOf(t.id)) }; pushed++ } else conflicts++
             }
         }
         // media
         runBlockingList { repository.mediaDao.unsynced() }.forEach { m ->
             upsert(cfg, SyncTables.MEDIA, m.id, mediaJson(m))?.let { applied ->
-                if (applied) { repository.mediaDao.markSynced(listOf(m.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.mediaDao.markSynced(listOf(m.id)) }; pushed++ } else conflicts++
             }
         }
         // consults
         runBlockingList { repository.consultDao.unsynced() }.forEach { c ->
             upsert(cfg, SyncTables.CONSULTS, c.id, consultJson(c))?.let { applied ->
-                if (applied) { repository.consultDao.markSynced(listOf(c.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.consultDao.markSynced(listOf(c.id)) }; pushed++ } else conflicts++
             }
         }
         // discharges
         runBlockingList { repository.dischargeDao.unsynced() }.forEach { d ->
             upsert(cfg, SyncTables.DISCHARGES, d.id, dischargeJson(d))?.let { applied ->
-                if (applied) { repository.dischargeDao.markSynced(listOf(d.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.dischargeDao.markSynced(listOf(d.id)) }; pushed++ } else conflicts++
             }
         }
         // fluid io
         runBlockingList { repository.fluidIoDao.unsynced() }.forEach { f ->
             upsert(cfg, SyncTables.FLUID_IO, f.id, fluidJson(f))?.let { applied ->
-                if (applied) { repository.fluidIoDao.markSynced(listOf(f.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.fluidIoDao.markSynced(listOf(f.id)) }; pushed++ } else conflicts++
             }
         }
         // vitals
         runBlockingList { repository.vitalsLogDao.unsynced() }.forEach { v ->
             upsert(cfg, SyncTables.VITALS, v.id, vitalsJson(v))?.let { applied ->
-                if (applied) { repository.vitalsLogDao.markSynced(listOf(v.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.vitalsLogDao.markSynced(listOf(v.id)) }; pushed++ } else conflicts++
             }
         }
         // ot
         runBlockingList { repository.otScheduleDao.unsynced() }.forEach { o ->
             upsert(cfg, SyncTables.OT, o.id, otJson(o))?.let { applied ->
-                if (applied) { repository.otScheduleDao.markSynced(listOf(o.id)); pushed++ } else conflicts++
+                if (applied) { runBlock { repository.otScheduleDao.markSynced(listOf(o.id)) }; pushed++ } else conflicts++
             }
         }
         return pushed to conflicts
@@ -258,58 +258,60 @@ class CloudSyncManager(
         val id = o.str("id") ?: return false
         val remoteUpdated = o.dbl("updated_at")?.toLong() ?: 0L
         val deletedAt = o.dbl("deleted_at")?.toLong()
-        return when (table) {
-            SyncTables.PATIENTS -> {
-                if (newer(remoteUpdated, repository.patientDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.patientDao.upsert(patientFromJ(o, deletedAt))); true
-                } else false
+        return runBlock {
+            when (table) {
+                SyncTables.PATIENTS -> {
+                    if (newer(remoteUpdated, repository.patientDao.byId(id)?.updatedAt)) {
+                        repository.patientDao.upsert(patientFromJ(o, deletedAt)); true
+                    } else false
+                }
+                SyncTables.ENCOUNTERS -> {
+                    if (newer(remoteUpdated, repository.encounterDao.byId(id)?.updatedAt)) {
+                        repository.encounterDao.upsert(encounterFromJ(o, deletedAt)); true
+                    } else false
+                }
+                SyncTables.CARDEX -> {
+                    if (newer(remoteUpdated, repository.cardexDao.byId(id)?.updatedAt)) {
+                        repository.cardexDao.upsert(cardexFromJ(o, deletedAt)); true
+                    } else false
+                }
+                SyncTables.TASKS -> {
+                    if (newer(remoteUpdated, repository.taskDao.byId(id)?.updatedAt)) {
+                        repository.taskDao.upsert(taskFromJ(o, deletedAt)); true
+                    } else false
+                }
+                SyncTables.MEDIA -> {
+                    if (newer(remoteUpdated, repository.mediaDao.byId(id)?.updatedAt)) {
+                        repository.mediaDao.upsert(mediaFromJ(o, deletedAt)); true
+                    } else false
+                }
+                SyncTables.CONSULTS -> {
+                    if (newer(remoteUpdated, repository.consultDao.byId(id)?.updatedAt)) {
+                        repository.consultDao.upsert(consultFromJ(o, deletedAt)); true
+                    } else false
+                }
+                SyncTables.DISCHARGES -> {
+                    if (newer(remoteUpdated, repository.dischargeDao.byId(id)?.updatedAt)) {
+                        repository.dischargeDao.upsert(dischargeFromJ(o, deletedAt)); true
+                    } else false
+                }
+                SyncTables.FLUID_IO -> {
+                    if (newer(remoteUpdated, repository.fluidIoDao.byId(id)?.updatedAt)) {
+                        repository.fluidIoDao.upsert(fluidFromJ(o, deletedAt)); true
+                    } else false
+                }
+                SyncTables.VITALS -> {
+                    if (newer(remoteUpdated, repository.vitalsLogDao.byId(id)?.updatedAt)) {
+                        repository.vitalsLogDao.upsert(vitalsFromJ(o, deletedAt)); true
+                    } else false
+                }
+                SyncTables.OT -> {
+                    if (newer(remoteUpdated, repository.otScheduleDao.byId(id)?.updatedAt)) {
+                        repository.otScheduleDao.upsert(otFromJ(o, deletedAt)); true
+                    } else false
+                }
+                else -> false
             }
-            SyncTables.ENCOUNTERS -> {
-                if (newer(remoteUpdated, repository.encounterDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.encounterDao.upsert(encounterFromJ(o, deletedAt))); true
-                } else false
-            }
-            SyncTables.CARDEX -> {
-                if (newer(remoteUpdated, repository.cardexDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.cardexDao.upsert(cardexFromJ(o, deletedAt))); true
-                } else false
-            }
-            SyncTables.TASKS -> {
-                if (newer(remoteUpdated, repository.taskDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.taskDao.upsert(taskFromJ(o, deletedAt))); true
-                } else false
-            }
-            SyncTables.MEDIA -> {
-                if (newer(remoteUpdated, repository.mediaDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.mediaDao.upsert(mediaFromJ(o, deletedAt))); true
-                } else false
-            }
-            SyncTables.CONSULTS -> {
-                if (newer(remoteUpdated, repository.consultDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.consultDao.upsert(consultFromJ(o, deletedAt))); true
-                } else false
-            }
-            SyncTables.DISCHARGES -> {
-                if (newer(remoteUpdated, repository.dischargeDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.dischargeDao.upsert(dischargeFromJ(o, deletedAt))); true
-                } else false
-            }
-            SyncTables.FLUID_IO -> {
-                if (newer(remoteUpdated, repository.fluidIoDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.fluidIoDao.upsert(fluidFromJ(o, deletedAt))); true
-                } else false
-            }
-            SyncTables.VITALS -> {
-                if (newer(remoteUpdated, repository.vitalsLogDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.vitalsLogDao.upsert(vitalsFromJ(o, deletedAt))); true
-                } else false
-            }
-            SyncTables.OT -> {
-                if (newer(remoteUpdated, repository.otScheduleDao.byId(id)?.updatedAt)) {
-                    runBlock(repository.otScheduleDao.upsert(otFromJ(o, deletedAt))); true
-                } else false
-            }
-            else -> false
         }
     }
 

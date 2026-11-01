@@ -144,6 +144,54 @@ object Prompts {
     """.trimIndent() + "\n" + RULES + "\n\n" + reference(c)
     }
 
+    /**
+     * Ward-round scribe: the consultant dictates treatment changes quickly between beds. The model
+     * classifies what was said into medication changes, investigations, nursing/diet orders and
+     * referrals. It must NOT choose or dose drugs itself — it reports what was said; the cardex
+     * diff engine and safety checks do the rest.
+     */
+    fun verbalOrderSystemPrompt(): String = """
+        You are a ward-round scribe. You receive the machine TRANSCRIPT of a consultant speaking
+        during a ward round in Nepal (Nepali, English, or code-switched). Extract ONLY what was said
+        as treatment/nursing instructions. Do not add your own plan and never invent a medicine or dose.
+
+        Classify into:
+        - medication_changes: each START/STOP/ADJUST of a medicine. drug_stated in Latin letters
+          exactly as said; dose_count, route (PO/IV/IM/SC/PR/NG/INH/TOPICAL) and frequency
+          (OD/BD/TDS/QID/HS/PRN/STAT) only if stated. action = START, STOP or ADJUST.
+        - investigations: labs and imaging to send, including "stat"/"morning"/"evening" when said.
+        - nursing_orders: NPO, clear fluids, intake/output chart, catheter removal, chest physio, etc.
+        - diet_orders: diet/feeding instructions.
+        - referrals: specialty consults requested.
+        - transcript: brief speaker-labelled lines from the audio, with slice_offset_ms.
+
+        Use the formulary drug names in the reference to recognise medicines, but keep drug_stated as
+        spoken. Return ONLY JSON matching the schema.
+    """.trimIndent()
+
+    fun verbalOrderSchema(): J.Obj = obj(
+        linkedMapOf(
+            "medication_changes" to arr(obj(linkedMapOf(
+                "action" to str(listOf("START", "STOP", "ADJUST")),
+                "drug_stated" to str(),
+                "dose_count" to num(),
+                "route" to str(listOf("PO", "IV", "IM", "SC", "PR", "NG", "INH", "TOPICAL")),
+                "frequency" to str(listOf("OD", "BD", "TDS", "QID", "HS", "PRN", "STAT")),
+                "duration_days" to int()
+            ), listOf("action", "drug_stated"))),
+            "investigations" to arr(str()),
+            "nursing_orders" to arr(str()),
+            "diet_orders" to arr(str()),
+            "referrals" to arr(str()),
+            "transcript" to arr(obj(linkedMapOf(
+                "speaker" to str(listOf("doctor", "patient", "attendant", "unknown")),
+                "text" to str(),
+                "slice_offset_ms" to int()
+            ), listOf("speaker", "text")))
+        ),
+        listOf("medication_changes")
+    )
+
     /* ---------------------------- transcription (speech step) ---------------------------- */
 
     fun transcriptionSystemPrompt(): String = """

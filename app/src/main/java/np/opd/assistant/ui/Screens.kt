@@ -55,6 +55,7 @@ import np.opd.assistant.RxText
 import np.opd.assistant.Screen
 import np.opd.assistant.SessionViewModel
 import np.opd.assistant.UiState
+import np.opd.assistant.ward.RoundViewModel
 import np.opd.assistant.ward.WardViewModel
 import np.opd.engine.Catalogues
 import np.opd.engine.Demographics
@@ -80,7 +81,7 @@ private val AppColors = lightColorScheme(
 )
 
 @Composable
-fun OpdApp(vm: SessionViewModel, wardVm: WardViewModel) {
+fun OpdApp(vm: SessionViewModel, wardVm: WardViewModel, roundVm: RoundViewModel) {
     val st by vm.ui.collectAsStateWithLifecycle()
     MaterialTheme(colorScheme = AppColors) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -103,6 +104,7 @@ fun OpdApp(vm: SessionViewModel, wardVm: WardViewModel) {
                     } else {
                         PatientChartScreen(
                             wardVm = wardVm,
+                            roundVm = roundVm,
                             patientId = patientId,
                             onBack = { wardVm.closePatient(); vm.go(Screen.WARD) }
                         )

@@ -32,7 +32,6 @@ import java.net.Socket
 import java.net.URLDecoder
 import java.util.Collections
 import java.util.Locale
-import java.util.concurrent.Executors
 
 /**
  * Zero-dependency local PC bridge.
@@ -51,8 +50,9 @@ import java.util.concurrent.Executors
 class LocalPcBridgeService : Service() {
 
     private var serverSocket: ServerSocket? = null
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val pool = Executors.newFixedThreadPool(4)
+    // Bounded concurrency: at most 8 client sockets handled at once, so a burst of requests cannot
+    // exhaust threads. Runs on IO with limited parallelism.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(8))
     private lateinit var repository: WardRepository
     private lateinit var provider: BridgeTextProvider
 
@@ -80,7 +80,7 @@ class LocalPcBridgeService : Service() {
                 _state.value = BridgeState(running = true, ip = wifiIp(), port = PORT, pin = pin)
                 while (!server.isClosed) {
                     val client = try { server.accept() } catch (e: Exception) { break }
-                    pool.execute { handle(client) }
+                    scope.launch { handle(client) }
                 }
             } catch (e: Exception) {
                 _state.value = _state.value.copy(running = false, error = "Could not start bridge: ${e.message}")
@@ -90,26 +90,33 @@ class LocalPcBridgeService : Service() {
     }
 
     private fun handle(client: Socket) {
-        client.use { socket ->
-            try {
+        try {
+            client.use { socket ->
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
                 val requestLine = reader.readLine() ?: return
                 // Drain headers.
                 while (true) { val l = reader.readLine(); if (l.isNullOrEmpty()) break }
+                val method = requestLine.split(" ").getOrNull(0) ?: "GET"
                 val path = requestLine.split(" ").getOrNull(1) ?: "/"
+                val out = socket.getOutputStream()
+                if (method == "OPTIONS") {
+                    // CORS preflight.
+                    writeRaw(out, "text/plain", ByteArray(0))
+                    return
+                }
                 val (uri, query) = path.split("?", limit = 2).let { it[0] to (it.getOrNull(1) ?: "") }
                 val params = parseQuery(query)
-                val out = socket.getOutputStream()
                 route(uri, params, out)
-            } catch (e: Exception) {
-                // A broken client must never take the server down.
             }
+        } catch (e: java.net.SocketException) {
+            // Broken pipe / client closed the tab: expected, never crash the accept loop.
+        } catch (e: Exception) {
+            // A broken client must never take the server down.
         }
     }
 
     private fun route(uri: String, params: Map<String, String>, out: OutputStream) {
-        when (uri) {
-            "/", "/index.html" -> writeHtml(out, DASHBOARD_HTML)
+        when (uri) {            "/", "/index.html" -> writeHtml(out, DASHBOARD_HTML)
             "/api/patients" -> {
                 if (!authorized(params)) { writeJson(out, """{"error":"auth"}"""); return }
                 val list = runBlocking { provider.patientList() }
@@ -143,7 +150,13 @@ class LocalPcBridgeService : Service() {
     private fun writeHtml(out: OutputStream, body: String) = writeRaw(out, "text/html; charset=utf-8", body.toByteArray(Charsets.UTF_8))
 
     private fun writeRaw(out: OutputStream, contentType: String, body: ByteArray) {
-        val header = "HTTP/1.1 200 OK\r\nContent-Type: $contentType\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n"
+        val header = "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: $contentType\r\n" +
+            "Content-Length: ${body.size}\r\n" +
+            "Access-Control-Allow-Origin: *\r\n" +
+            "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+            "Access-Control-Allow-Headers: Content-Type, Authorization, X-Bridge-Pin\r\n" +
+            "Connection: close\r\n\r\n"
         out.write(header.toByteArray(Charsets.US_ASCII))
         out.write(body)
         out.flush()
@@ -212,7 +225,6 @@ class LocalPcBridgeService : Service() {
     override fun onDestroy() {
         try { serverSocket?.close() } catch (e: Exception) { }
         serverSocket = null
-        pool.shutdownNow()
         scope.cancel()
         _state.value = BridgeState()
         super.onDestroy()
@@ -278,6 +290,7 @@ class LocalPcBridgeService : Service() {
   </div>
  </div>
  <div class="card"><label>Preview</label><pre id="preview">Unlock, choose a patient and a document.</pre>
+  <textarea id="fallback" style="display:none;width:100%;height:120px;margin-top:8px" placeholder="If clipboard is blocked, the text appears here to copy manually"></textarea>
   <button class="ghost" onclick="copyPreview()">📋 Copy preview to clipboard</button></div>
 </main>
 <script>
@@ -294,9 +307,16 @@ async function doc(kind){const pid=q('patient').value;if(!pid){q('preview').text
  const j=await r.json();
  if(j.text!==undefined){q('preview').textContent=j.text}
 }
+function manualCopy(t){const f=q('fallback');f.style.display='block';f.value=t;f.focus();f.select();
+ try{document.execCommand('copy')}catch(e){};}
 async function copyPreview(){const t=q('preview').textContent;
- try{await navigator.clipboard.writeText(t)}catch(e){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}
- q('preview').textContent='Copied to clipboard.\n\n'+t}
+ // Clipboard API requires a secure context (HTTPS/localhost); over a raw LAN IP it is blocked,
+ // so fall back to a visible, pre-selected textarea for manual Ctrl+C.
+ if(navigator.clipboard&&window.isSecureContext){
+   try{await navigator.clipboard.writeText(t);q('preview').textContent='Copied to clipboard.\n\n'+t;return}catch(e){}
+ }
+ manualCopy(t);
+}
 </script></body></html>
         """.trimIndent()
     }

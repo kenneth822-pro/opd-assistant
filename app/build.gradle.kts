@@ -126,6 +126,7 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.room:room-testing:$roomVersion")
     // Room schema export + in-memory migration testing are JVM-friendly.
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
 }

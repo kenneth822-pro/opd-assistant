@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import np.opd.assistant.data.local.entities.ServiceUnit
 import np.opd.assistant.data.local.entities.WardUnit
+import np.opd.assistant.ward.ClinicalViewModel
 import np.opd.assistant.ward.WardTab
 import np.opd.assistant.ward.WardUiState
 import np.opd.assistant.ward.WardViewModel
@@ -39,13 +40,29 @@ import np.opd.assistant.ward.WardViewModel
 private const val BEDS_PER_WARD = 12
 
 @Composable
-fun WardScreen(wardVm: WardViewModel, onBack: () -> Unit, onOpenPatient: (String) -> Unit, onAskWard: () -> Unit) {
+fun WardScreen(wardVm: WardViewModel, clinicalVm: ClinicalViewModel, onBack: () -> Unit, onOpenPatient: (String) -> Unit, onAskWard: () -> Unit) {
     val state by wardVm.ui.collectAsStateWithLifecycle()
+    val latestVitals by wardVm.latestVitals.collectAsStateWithLifecycle()
+    val latestOt by wardVm.latestOt.collectAsStateWithLifecycle()
+    val clinical by clinicalVm.ui.collectAsStateWithLifecycle()
     var showAdmit by remember { mutableStateOf(false) }
     var showBridge by remember { mutableStateOf(false) }
+    var vitalsFor by remember { mutableStateOf<String?>(null) }
     BackHandler { onBack() }
 
     if (showBridge) PcBridgeDialog(onDismiss = { showBridge = false })
+
+    vitalsFor?.let { pid ->
+        val name = state.patients.firstOrNull { it.id == pid }?.name ?: "Patient"
+        VitalsEntryDialog(
+            patientName = name,
+            onDismiss = { vitalsFor = null },
+            onSave = { entry, result ->
+                clinicalVm.saveVitals(pid, entry) { }
+                vitalsFor = null
+            }
+        )
+    }
 
     if (showAdmit) {
         AdmissionDialog(
@@ -92,6 +109,8 @@ fun WardScreen(wardVm: WardViewModel, onBack: () -> Unit, onOpenPatient: (String
         }
 
         state.message?.let { Text(it, color = Palette.infoFg, fontSize = 13.sp) }
+        clinical.message?.let { Text(it, color = Palette.okFg, fontSize = 13.sp) }
+        clinical.error?.let { Text(it, color = Palette.emergencyFg, fontSize = 13.sp) }
 
         val shown = wardVm.forTab(state.patients, state.tab)
 
@@ -101,16 +120,26 @@ fun WardScreen(wardVm: WardViewModel, onBack: () -> Unit, onOpenPatient: (String
             }
         } else {
             shown.forEach { p ->
+                val vitals = latestVitals[p.id]
+                val ot = latestOt[p.id]
                 val chips = buildList {
                     if (p.currentWard == WardUnit.ICU) add("Ventilated")
                     if (p.currentWard == WardUnit.SEMI_ICU) add("HDU")
                     if (p.age != null && p.age >= 65) add("Elderly")
+                    ot?.let { s ->
+                        if (s.status == "SCHEDULED" || s.status == "IN_OT") {
+                            val done = listOf(s.pacCleared, s.consentSigned, s.bloodArrangedUnits > 0, s.npoSinceTimestamp != null, s.siteMarked).count { it }
+                            add(if (done >= 5) "CLEARED FOR OT" else "PRE-OP ($done/5)")
+                        }
+                    }
                 }
                 BedCard(
                     patient = p,
                     bedNumber = p.bedNumber,
                     pod = null,
                     chips = chips,
+                    news2Score = vitals?.news2Score,
+                    news2Risk = vitals?.news2Risk,
                     onClick = { onOpenPatient(p.id) }
                 )
             }

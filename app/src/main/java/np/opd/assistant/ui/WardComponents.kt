@@ -66,6 +66,8 @@ fun BedCard(
     bedNumber: String,
     pod: Int?,
     chips: List<String>,
+    news2Score: Int? = null,
+    news2Risk: String? = null,
     onClick: () -> Unit
 ) {
     val (bg, fg) = wardAccent(patient.currentWard)
@@ -76,7 +78,7 @@ fun BedCard(
         colors = CardDefaults.cardColors(containerColor = bg)
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Bed ${bedNumber.ifBlank { "—" }}",
                     color = fg,
@@ -99,6 +101,9 @@ fun BedCard(
                 pod?.let { append(" · POD $it") }
             }
             Text(subtitle, color = fg, fontSize = 12.sp)
+            if (news2Score != null) {
+                News2Badge(news2Score, news2Risk)
+            }
             if (chips.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     chips.take(4).forEach { c -> Pill(c, Color.White.copy(alpha = 0.6f), fg) }
@@ -106,6 +111,17 @@ fun BedCard(
             }
         }
     }
+}
+
+/** Colour-coded NEWS2 deterioration badge: green (0-4), orange (5-6), red (7+). */
+@Composable
+fun News2Badge(score: Int, risk: String?) {
+    val (bg, fg, label) = when {
+        score >= 7 -> Triple(WardPalette.criticalBg, WardPalette.criticalFg, "NEWS2 $score · EMERGENCY")
+        score >= 5 -> Triple(Palette.urgentBg, Palette.urgentFg, "NEWS2 $score · URGENT")
+        else -> Triple(Palette.okBg, Palette.okFg, "NEWS2 $score")
+    }
+    Pill(label, bg, fg)
 }
 
 /** Empty bed tile so unfilled beds are visible on the board. */

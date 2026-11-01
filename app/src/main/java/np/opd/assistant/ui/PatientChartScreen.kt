@@ -39,6 +39,8 @@ enum class ChartTab(val label: String) {
     SUMMARY("Summary / Vitals"),
     CARDEX("Cardex"),
     ROUNDS("Senior Rounds"),
+    FLUID_IO("Fluid I/O"),
+    OT("OT & Pre-Op"),
     TODO("To-Do & Orders"),
     MEDIA("Imaging & Media"),
     DISCHARGE("Discharge Planner")
@@ -108,6 +110,20 @@ fun PatientChartScreen(
 
             ChartTab.ROUNDS -> {
                 RoundsTab(roundVm, patientId, activeEncounter?.id)
+            }
+
+            ChartTab.FLUID_IO -> {
+                val clinicalVm: np.opd.assistant.ward.ClinicalViewModel = viewModel()
+                FluidIoTab(wardVm = wardVm, clinicalVm = clinicalVm, patientId = patientId)
+            }
+
+            ChartTab.OT -> {
+                val clinicalVm: np.opd.assistant.ward.ClinicalViewModel = viewModel()
+                if (activeEncounter == null) {
+                    SectionCard("OT & Pre-Op") { Muted("No open admission for this patient.") }
+                } else {
+                    OtSlateTab(wardVm = wardVm, clinicalVm = clinicalVm, patientId = patientId, encounterId = activeEncounter.id)
+                }
             }
 
             ChartTab.TODO -> SectionCard("To-Do & Orders") {
@@ -294,6 +310,117 @@ private fun kindLabel(kind: OrderKind): String = when (kind) {
     OrderKind.DIET -> "DIET"
     OrderKind.REFERRAL -> "CONSULT"
     OrderKind.MED -> "MED"
+}
+
+@Composable
+private fun FluidIoTab(
+    wardVm: WardViewModel,
+    clinicalVm: np.opd.assistant.ward.ClinicalViewModel,
+    patientId: String
+) {
+    val entries by remember(patientId) { wardVm.repository.fluidIoDao.observeForPatient(patientId) }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val clinical by clinicalVm.ui.collectAsStateWithLifecycle()
+
+    val totalIn = entries.sumOf { it.intakeMl }
+    val totalOut = entries.sumOf { it.outputMl }
+    val net = totalIn - totalOut
+    val netColor = if (net > 2000 || net < -1000) Palette.emergencyFg else Palette.okFg
+
+    SectionCard("Fluid Balance (24 h chart)") {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Intake: $totalIn mL", fontWeight = FontWeight.SemiBold)
+            Text("Output: $totalOut mL", fontWeight = FontWeight.SemiBold)
+        }
+        Text("Net: ${if (net >= 0) "+" else ""}$net mL", color = netColor, fontWeight = FontWeight.Bold)
+        clinical.message?.let { Text(it, color = Palette.okFg, fontSize = 12.sp) }
+        clinical.error?.let { Text(it, color = Palette.emergencyFg, fontSize = 12.sp) }
+    }
+
+    SectionCard("Quick entry") {
+        Muted("Intake")
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { clinicalVm.addFluid(patientId, "IV NS", 500, "", 0) }) { Text("+500 mL IV NS") }
+            OutlinedButton(onClick = { clinicalVm.addFluid(patientId, "RL", 250, "", 0) }) { Text("+250 mL RL") }
+            OutlinedButton(onClick = { clinicalVm.addFluid(patientId, "Oral sips", 100, "", 0) }) { Text("+100 mL Oral sips") }
+        }
+        Muted("Output")
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { clinicalVm.addFluid(patientId, "", 0, "Urine", 250) }) { Text("-Urine 250 mL") }
+            OutlinedButton(onClick = { clinicalVm.addFluid(patientId, "", 0, "Drain 1", 50) }) { Text("-Drain 1 50 mL") }
+        }
+    }
+
+    SectionCard("Chart") {
+        if (entries.isEmpty()) {
+            Muted("No fluid entries yet.")
+        } else {
+            entries.take(20).forEach { e ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    val label = buildString {
+                        if (e.intakeMl > 0) append("IN  ${e.intakeType} ${e.intakeMl} mL")
+                        if (e.outputMl > 0) { if (isNotEmpty()) append("  |  "); append("OUT ${e.outputType} ${e.outputMl} mL") }
+                    }
+                    Text(label, fontSize = 13.sp)
+                    TextButton(onClick = { clinicalVm.deleteFluid(e.id) }) { Text("✕") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OtSlateTab(
+    wardVm: WardViewModel,
+    clinicalVm: np.opd.assistant.ward.ClinicalViewModel,
+    patientId: String,
+    encounterId: String
+) {
+    val schedules by remember(encounterId) { wardVm.repository.otScheduleDao.observeForEncounter(encounterId) }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val clinical by clinicalVm.ui.collectAsStateWithLifecycle()
+    val schedule = schedules.firstOrNull()
+
+    // Create a default slate on first view if none exists.
+    androidx.compose.runtime.LaunchedEffect(encounterId, schedules.isEmpty()) {
+        if (schedules.isEmpty()) {
+            clinicalVm.saveOt(
+                np.opd.assistant.data.local.entities.OtScheduleEntity(
+                    id = java.util.UUID.randomUUID().toString(),
+                    patientId = patientId,
+                    encounterId = encounterId
+                )
+            )
+        }
+    }
+
+    val s = schedule
+    SectionCard("OT & Pre-Op Checklist") {
+        if (s == null) {
+            Muted("Preparing the theatre slate…")
+            return@SectionCard
+        }
+        clinical.message?.let { Text(it, color = Palette.okFg, fontSize = 12.sp) }
+        val done = listOf(s.pacCleared, s.consentSigned, s.bloodArrangedUnits > 0, s.npoSinceTimestamp != null, s.siteMarked).count { it }
+        Text(if (done >= 5) "CLEARED FOR OT ($done/5)" else "PRE-OP ($done/5 complete)", fontWeight = FontWeight.Bold)
+        ChecklistRow("PAC clearance", s.pacCleared) { clinicalVm.saveOt(s.copy(pacCleared = it)) }
+        ChecklistRow("Informed high-risk consent signed", s.consentSigned) { clinicalVm.saveOt(s.copy(consentSigned = it)) }
+        ChecklistRow("Blood crossmatch & reservation (≥1 unit)", s.bloodArrangedUnits > 0) {
+            clinicalVm.saveOt(s.copy(bloodArrangedUnits = if (it) 1 else 0))
+        }
+        ChecklistRow("NPO from 12 AM", s.npoSinceTimestamp != null) {
+            clinicalVm.saveOt(s.copy(npoSinceTimestamp = if (it) System.currentTimeMillis() else null))
+        }
+        ChecklistRow("Surgical site marked", s.siteMarked) { clinicalVm.saveOt(s.copy(siteMarked = it)) }
+    }
+}
+
+@Composable
+private fun ChecklistRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = { onChange(it) })
+        Text(label, fontSize = 14.sp)
+    }
 }
 
 @Composable

@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import np.opd.assistant.OpdApplication
@@ -56,6 +59,31 @@ class WardViewModel(app: Application) : AndroidViewModel(app) {
     private val _openPatientId = MutableStateFlow<String?>(null)
 
     val openPatientId: StateFlow<String?> get() = _openPatientId
+
+    /**
+     * Latest vitals log per active patient, for the NEWS2 badge on the ward board. Built by
+     * flat-mapping the census ids into per-patient latest-vitals flows.
+     */
+    val latestVitals: StateFlow<Map<String, np.opd.assistant.data.local.entities.VitalsLogEntity?>> =
+        repository.census()
+            .flatMapLatest { list ->
+                if (list.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyMap())
+                else kotlinx.coroutines.flow.combine(
+                    list.map { p -> repository.vitalsLogDao.observeLatest(p.id).map { p.id to it } }
+                ) { pairs -> pairs.toMap() }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Latest OT slate per active patient, for the bed-card pre-op chip. */
+    val latestOt: StateFlow<Map<String, np.opd.assistant.data.local.entities.OtScheduleEntity>> =
+        repository.census()
+            .flatMapLatest { list ->
+                if (list.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyMap())
+                else kotlinx.coroutines.flow.combine(
+                    list.map { p -> repository.otScheduleDao.observeForPatient(p.id).map { p.id to it.firstOrNull() } }
+                ) { pairs -> pairs.filter { it.second != null }.associate { it.first to it.second!! } }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     fun openPatient(id: String) { _openPatientId.value = id }
     fun closePatient() { _openPatientId.value = null }

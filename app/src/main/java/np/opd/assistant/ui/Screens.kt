@@ -92,12 +92,16 @@ fun OpdApp(vm: SessionViewModel, wardVm: WardViewModel, roundVm: RoundViewModel)
                 Screen.SETUP -> SetupScreen(st, vm)
                 Screen.RECORDING -> RecordingScreen(st, vm)
                 Screen.REVIEW -> ReviewScreen(st, vm)
-                Screen.WARD -> WardScreen(
-                    wardVm = wardVm,
-                    onBack = { vm.go(Screen.HOME) },
-                    onOpenPatient = { id -> wardVm.openPatient(id); vm.go(Screen.CHART) },
-                    onAskWard = { vm.go(Screen.WARD_QUERY) }
-                )
+                Screen.WARD -> {
+                    val clinicalVm: np.opd.assistant.ward.ClinicalViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    WardScreen(
+                        wardVm = wardVm,
+                        clinicalVm = clinicalVm,
+                        onBack = { vm.go(Screen.HOME) },
+                        onOpenPatient = { id -> wardVm.openPatient(id); vm.go(Screen.CHART) },
+                        onAskWard = { vm.go(Screen.WARD_QUERY) }
+                    )
+                }
                 Screen.CHART -> {
                     val patientId = wardVm.openPatientId.collectAsStateWithLifecycle().value
                     if (patientId == null) {

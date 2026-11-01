@@ -234,6 +234,18 @@ class DischargeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun showMessage(m: String?) = _ui.update { it.copy(message = m) }
 
+    /** Generates the discharge PDF from the current form and returns the file (null on failure). */
+    fun generatePdf(context: android.content.Context): java.io.File? {
+        val pid = patientId ?: return null
+        val st = _ui.value
+        return try {
+            np.opd.assistant.export.DischargePdfGenerator.generate(context, pid, st.toInput(patient)).file
+        } catch (e: Exception) {
+            _ui.update { it.copy(error = "Could not create PDF: ${e.message}") }
+            null
+        }
+    }
+
     private fun DischargeEntity.toUi(): DischargeUiState = DischargeUiState(
         kind = kind,
         status = status,

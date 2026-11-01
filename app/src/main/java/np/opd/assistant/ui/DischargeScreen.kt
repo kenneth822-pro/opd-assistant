@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -140,6 +142,17 @@ fun DischargeScreen(vm: DischargeViewModel, modifier: Modifier = Modifier) {
             ) { Text("Copy markdown (print)") }
         }
 
+        SectionCard("PDF") {
+            Text("Generates a hospital-style A4 discharge summary PDF (native, no extra apps).", fontSize = 12.sp)
+            Button(
+                onClick = {
+                    val file = vm.generatePdf(context)
+                    if (file != null) sharePdf(context, file) else vm.showMessage("Could not create the PDF.")
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("📄 Generate & Share PDF") }
+        }
+
         SectionCard("Governance", container = Palette.urgentBg) {
             Text("Status: ${st.status.name}", fontSize = 12.sp)
             Text("This is a prototype. The discharge text is UNVERIFIED and must be checked before it is used clinically.", fontSize = 12.sp)
@@ -176,4 +189,18 @@ private fun share(context: Context, text: String) {
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(intent, "Share discharge summary"))
+}
+
+private fun sharePdf(context: Context, file: File) {
+    try {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share discharge PDF"))
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(context, "Could not share the PDF: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+    }
 }

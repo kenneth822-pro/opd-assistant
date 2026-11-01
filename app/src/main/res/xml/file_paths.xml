@@ -4,5 +4,6 @@
          It is exposed to the system camera app only through this FileProvider, never to the
          public gallery. -->
     <files-path name="patient_media" path="patients/" />
+    <files-path name="discharges" path="discharges/" />
     <cache-path name="capture_cache" path="captures/" />
 </paths>

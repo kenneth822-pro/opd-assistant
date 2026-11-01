@@ -42,7 +42,10 @@ private const val BEDS_PER_WARD = 12
 fun WardScreen(wardVm: WardViewModel, onBack: () -> Unit, onOpenPatient: (String) -> Unit, onAskWard: () -> Unit) {
     val state by wardVm.ui.collectAsStateWithLifecycle()
     var showAdmit by remember { mutableStateOf(false) }
+    var showBridge by remember { mutableStateOf(false) }
     BackHandler { onBack() }
+
+    if (showBridge) PcBridgeDialog(onDismiss = { showBridge = false })
 
     if (showAdmit) {
         AdmissionDialog(
@@ -59,6 +62,7 @@ fun WardScreen(wardVm: WardViewModel, onBack: () -> Unit, onOpenPatient: (String
         title = "Ward Board",
         onBack = onBack,
         actions = {
+            TextButton(onClick = { showBridge = true }) { Text("PC Bridge") }
             TextButton(onClick = onAskWard) { Text("Ask") }
             TextButton(onClick = { showAdmit = true }) { Text("+ Admit") }
         }

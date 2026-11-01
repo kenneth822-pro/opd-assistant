@@ -145,6 +145,8 @@ private fun DisclaimerScreen(vm: SessionViewModel) {
 @Composable
 private fun HomeScreen(st: UiState, vm: SessionViewModel) {
     val ready = st.speechModel != null && vm.catalogues != null
+    var showBridge by remember { mutableStateOf(false) }
+    if (showBridge) PcBridgeDialog(onDismiss = { showBridge = false })
     Page("OPD Assistant") {
         Text("Ambient clinical assistant — prototype", style = MaterialTheme.typography.titleMedium)
         Muted("Listens to a consultation, shows what to ask next and what to rule out, suggests protocol medicines after safety checks, and writes the note.")
@@ -178,6 +180,7 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
             OutlinedButton(onClick = { vm.go(Screen.REVIEW) }, modifier = Modifier.fillMaxWidth()) { Text("Open last consultation") }
         }
         OutlinedButton(onClick = { vm.go(Screen.SETTINGS) }, modifier = Modifier.fillMaxWidth()) { Text("Settings") }
+        OutlinedButton(onClick = { showBridge = true }, modifier = Modifier.fillMaxWidth()) { Text("PC Bridge (desktop copy)") }
         st.message?.let { Text(it, color = Palette.emergencyFg) }
         HorizontalDivider()
         vm.catalogues?.let { c ->

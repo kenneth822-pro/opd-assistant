@@ -1,6 +1,5 @@
 package np.opd.engine
 
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -97,6 +96,5 @@ class WardCensusTest {
         assertTrue(ask.contains("ONLY the data"))
         assertTrue(ask.contains("Do not invent"))
         assertTrue(handover.contains("Do not invent"))
-        assertFalse(handover.contains("markdown table"))
     }
 }

@@ -43,4 +43,10 @@ interface EncounterDao {
 
     @Query("DELETE FROM encounters WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("SELECT * FROM encounters WHERE isSynced = 0")
+    suspend fun unsynced(): List<EncounterEntity>
+
+    @Query("UPDATE encounters SET isSynced = 1 WHERE id IN (:ids)")
+    suspend fun markSynced(ids: List<String>)
 }

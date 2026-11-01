@@ -66,4 +66,10 @@ interface PatientDao {
 
     @Query("DELETE FROM patients WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("SELECT * FROM patients WHERE isSynced = 0")
+    suspend fun unsynced(): List<PatientEntity>
+
+    @Query("UPDATE patients SET isSynced = 1 WHERE id IN (:ids)")
+    suspend fun markSynced(ids: List<String>)
 }

@@ -13,6 +13,9 @@ interface FluidIoDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: FluidIoEntity)
 
+    @Query("SELECT * FROM fluid_io_entries WHERE id = :id")
+    suspend fun byId(id: String): FluidIoEntity?
+
     @Query("SELECT * FROM fluid_io_entries WHERE patientId = :patientId AND deletedAt IS NULL ORDER BY timestamp DESC")
     fun observeForPatient(patientId: String): Flow<List<FluidIoEntity>>
 

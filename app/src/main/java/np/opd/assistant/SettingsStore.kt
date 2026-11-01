@@ -142,6 +142,33 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("privacy_safe_prompts", true)
         set(value) = prefs.edit().putBoolean("privacy_safe_prompts", value).apply()
 
+    // ---- Cloud sync (Supabase) ----
+
+    var supabaseUrl: String
+        get() = prefs.getString("supabase_url", "")?.trim().orEmpty()
+        set(value) = prefs.edit().putString("supabase_url", value.trim()).apply()
+
+    /** The anon key is stored encrypted with the Android Keystore, like provider API keys. */
+    var supabaseAnonKey: String
+        get() = prefs.getString("supabase_anon_enc", null)?.let { decrypt(it) } ?: ""
+        set(value) {
+            val e = prefs.edit()
+            if (value.isBlank()) e.remove("supabase_anon_enc") else e.putString("supabase_anon_enc", encrypt(value.trim()))
+            e.apply()
+        }
+
+    var supabaseDoctorId: String
+        get() = prefs.getString("supabase_doctor_id", "")?.trim().orEmpty()
+        set(value) = prefs.edit().putString("supabase_doctor_id", value.trim()).apply()
+
+    var supabaseLastPull: Long
+        get() = prefs.getLong("supabase_last_pull", 0L)
+        set(value) = prefs.edit().putLong("supabase_last_pull", value).apply()
+
+    var autoSyncWifiOnly: Boolean
+        get() = prefs.getBoolean("supabase_wifi_only", true)
+        set(value) = prefs.edit().putBoolean("supabase_wifi_only", value).apply()
+
     /** Explicit opt-in required for HTTP custom servers. HTTPS remains the default. */
     var allowInsecureLocalServer: Boolean
         get() = prefs.getBoolean("allow_insecure_local_server", false)

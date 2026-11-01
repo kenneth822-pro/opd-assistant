@@ -13,6 +13,9 @@ interface VitalsLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: VitalsLogEntity)
 
+    @Query("SELECT * FROM vitals_logs WHERE id = :id")
+    suspend fun byId(id: String): VitalsLogEntity?
+
     @Query("SELECT * FROM vitals_logs WHERE patientId = :patientId AND deletedAt IS NULL ORDER BY timestamp DESC")
     fun observeForPatient(patientId: String): Flow<List<VitalsLogEntity>>
 

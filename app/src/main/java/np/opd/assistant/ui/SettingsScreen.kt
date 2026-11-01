@@ -201,6 +201,8 @@ internal fun SettingsScreen(st: UiState, vm: SessionViewModel) {
         Muted("Add a key for at least one provider. Keys are encrypted on this phone and only sent to that provider.")
         Provider.entries.forEach { p -> ProviderCard(p, st, vm) }
 
+        CloudSyncSection()
+
         Text("Models", style = MaterialTheme.typography.titleMedium)
         SectionCard("1. Speech model — listens to the audio") {
             ModelSummary(st.speechModel, "Not chosen yet")
@@ -561,5 +563,52 @@ private fun RetentionOption(title: String, desc: String, selected: Boolean, onCl
         OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth()) { Text(title, fontWeight = FontWeight.Bold); Text(desc, fontSize = 12.sp) }
         }
+    }
+}
+
+@Composable
+private fun CloudSyncSection() {
+    val vm: np.opd.assistant.ward.CloudSyncViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val st by vm.ui.collectAsStateWithLifecycle()
+    var keyField by remember { mutableStateOf("") }
+
+    SectionCard("Cloud Sync (Supabase)") {
+        Muted("Optional: back the ward database up to your own Supabase project and pull changes from other devices. Offline-first; nothing syncs until you press Sync Now.")
+        OutlinedTextField(
+            value = st.url,
+            onValueChange = { vm.setUrl(it) },
+            label = { Text("Supabase project URL (https://xxxx.supabase.co)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = st.doctorId,
+            onValueChange = { vm.setDoctorId(it) },
+            label = { Text("Doctor id / email (conflict attribution)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = keyField,
+            onValueChange = { keyField = it; vm.setKeyInput(it) },
+            label = { Text(if (st.hasKey) "Anon key saved — paste a new one to replace" else "Supabase anon key") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = st.wifiOnly, onCheckedChange = { vm.setWifiOnly(it) })
+            Text("Only sync on Wi-Fi")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { vm.saveKey(); keyField = "" }, enabled = st.keyInput.isNotBlank() || st.hasKey) { Text("Save key") }
+            OutlinedButton(onClick = { vm.testConnection() }) { Text("Test connection") }
+            OutlinedButton(onClick = { vm.syncNow() }) { Text("Sync now") }
+        }
+        if (st.hasKey) TextButton(onClick = { vm.clearKey() }) { Text("Remove saved key") }
+        Text("Status: ${st.state.name}", fontSize = 12.sp)
+        st.message?.let { Text(it, color = Palette.infoFg, fontSize = 12.sp) }
+        Muted("The anon key is stored encrypted on this device. Cloud sync sends full ward records to your Supabase project over HTTPS.")
     }
 }

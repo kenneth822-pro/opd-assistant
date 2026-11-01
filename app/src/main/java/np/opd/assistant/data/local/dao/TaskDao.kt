@@ -49,4 +49,10 @@ interface TaskDao {
 
     @Query("DELETE FROM patient_tasks WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("SELECT * FROM patient_tasks WHERE isSynced = 0")
+    suspend fun unsynced(): List<TaskEntity>
+
+    @Query("UPDATE patient_tasks SET isSynced = 1 WHERE id IN (:ids)")
+    suspend fun markSynced(ids: List<String>)
 }

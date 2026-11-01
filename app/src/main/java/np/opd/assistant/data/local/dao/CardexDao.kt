@@ -39,4 +39,10 @@ interface CardexDao {
 
     @Query("DELETE FROM cardex_items WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("SELECT * FROM cardex_items WHERE isSynced = 0")
+    suspend fun unsynced(): List<CardexItemEntity>
+
+    @Query("UPDATE cardex_items SET isSynced = 1 WHERE id IN (:ids)")
+    suspend fun markSynced(ids: List<String>)
 }

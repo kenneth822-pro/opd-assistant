@@ -35,4 +35,10 @@ interface DischargeDao {
 
     @Query("DELETE FROM discharges WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("SELECT * FROM discharges WHERE isSynced = 0")
+    suspend fun unsynced(): List<DischargeEntity>
+
+    @Query("UPDATE discharges SET isSynced = 1 WHERE id IN (:ids)")
+    suspend fun markSynced(ids: List<String>)
 }

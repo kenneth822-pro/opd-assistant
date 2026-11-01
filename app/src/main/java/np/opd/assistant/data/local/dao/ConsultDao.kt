@@ -33,4 +33,10 @@ interface ConsultDao {
 
     @Query("DELETE FROM consult_requests WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("SELECT * FROM consult_requests WHERE isSynced = 0")
+    suspend fun unsynced(): List<ConsultEntity>
+
+    @Query("UPDATE consult_requests SET isSynced = 1 WHERE id IN (:ids)")
+    suspend fun markSynced(ids: List<String>)
 }

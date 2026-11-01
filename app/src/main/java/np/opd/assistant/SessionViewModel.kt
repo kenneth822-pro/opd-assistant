@@ -50,7 +50,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.ConcurrentHashMap
 
-enum class Screen { DISCLAIMER, HOME, SETTINGS, SETUP, RECORDING, REVIEW }
+enum class Screen { DISCLAIMER, HOME, SETTINGS, SETUP, RECORDING, REVIEW, WARD, CHART }
 enum class Mode { LIVE, SCRIBE, TRIAGE, DICTATION }
 
 /** Clinical focus that shapes the AI instructions for the chosen setting. */

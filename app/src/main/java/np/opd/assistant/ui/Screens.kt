@@ -55,6 +55,7 @@ import np.opd.assistant.RxText
 import np.opd.assistant.Screen
 import np.opd.assistant.SessionViewModel
 import np.opd.assistant.UiState
+import np.opd.assistant.ward.WardViewModel
 import np.opd.engine.Catalogues
 import np.opd.engine.Demographics
 import np.opd.engine.DoctorAction
@@ -79,7 +80,7 @@ private val AppColors = lightColorScheme(
 )
 
 @Composable
-fun OpdApp(vm: SessionViewModel) {
+fun OpdApp(vm: SessionViewModel, wardVm: WardViewModel) {
     val st by vm.ui.collectAsStateWithLifecycle()
     MaterialTheme(colorScheme = AppColors) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -90,6 +91,23 @@ fun OpdApp(vm: SessionViewModel) {
                 Screen.SETUP -> SetupScreen(st, vm)
                 Screen.RECORDING -> RecordingScreen(st, vm)
                 Screen.REVIEW -> ReviewScreen(st, vm)
+                Screen.WARD -> WardScreen(
+                    wardVm = wardVm,
+                    onBack = { vm.go(Screen.HOME) },
+                    onOpenPatient = { id -> wardVm.openPatient(id); vm.go(Screen.CHART) }
+                )
+                Screen.CHART -> {
+                    val patientId = wardVm.openPatientId.collectAsStateWithLifecycle().value
+                    if (patientId == null) {
+                        vm.go(Screen.WARD)
+                    } else {
+                        PatientChartScreen(
+                            wardVm = wardVm,
+                            patientId = patientId,
+                            onBack = { wardVm.closePatient(); vm.go(Screen.WARD) }
+                        )
+                    }
+                }
             }
         }
     }
@@ -145,6 +163,10 @@ private fun HomeScreen(st: UiState, vm: SessionViewModel) {
             enabled = ready,
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) { Text("New consultation", fontSize = 18.sp) }
+        OutlinedButton(
+            onClick = { vm.go(Screen.WARD) },
+            modifier = Modifier.fillMaxWidth().height(52.dp)
+        ) { Text("Ward / Inpatient board", fontSize = 16.sp) }
         if (st.hasSession && st.case.tick > 0) {
             OutlinedButton(onClick = { vm.go(Screen.REVIEW) }, modifier = Modifier.fillMaxWidth()) { Text("Open last consultation") }
         }

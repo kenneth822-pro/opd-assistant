@@ -39,6 +39,7 @@ enum class ChartTab(val label: String) {
     SUMMARY("Summary / Vitals"),
     CARDEX("Cardex"),
     ROUNDS("Senior Rounds"),
+    LABS("Labs"),
     FLUID_IO("Fluid I/O"),
     OT("OT & Pre-Op"),
     TODO("To-Do & Orders"),
@@ -115,6 +116,11 @@ fun PatientChartScreen(
             ChartTab.FLUID_IO -> {
                 val clinicalVm: np.opd.assistant.ward.ClinicalViewModel = viewModel()
                 FluidIoTab(wardVm = wardVm, clinicalVm = clinicalVm, patientId = patientId)
+            }
+
+            ChartTab.LABS -> {
+                val labVm: np.opd.assistant.ward.LabViewModel = viewModel()
+                LabFlowsheet(wardVm = wardVm, labVm = labVm, patientId = patientId, encounterId = activeEncounter?.id)
             }
 
             ChartTab.OT -> {

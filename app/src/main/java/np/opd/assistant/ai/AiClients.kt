@@ -27,6 +27,8 @@ sealed class AiPart {
     data class Text(val text: String) : AiPart()
     /** 16 kHz mono 16-bit WAV bytes. */
     class Wav(val bytes: ByteArray) : AiPart()
+    /** A JPEG/PNG image (e.g. a photographed lab slip), sent to a multimodal model. */
+    class Image(val bytes: ByteArray, val mime: String = "image/jpeg") : AiPart()
 }
 
 /** One model on one provider. */
@@ -165,6 +167,7 @@ class GeminiClient(
             partsJ += when (it) {
                 is AiPart.Text -> J.obj("text" to it.text)
                 is AiPart.Wav -> J.obj("inlineData" to J.obj("mimeType" to "audio/wav", "data" to Base64.encodeToString(it.bytes, Base64.NO_WRAP)))
+                is AiPart.Image -> J.obj("inlineData" to J.obj("mimeType" to it.mime, "data" to Base64.encodeToString(it.bytes, Base64.NO_WRAP)))
             }
         }
         val generation = LinkedHashMap<String, Any?>()
@@ -246,6 +249,10 @@ class OpenAiCompatClient(
                     is AiPart.Wav -> J.obj(
                         "type" to "input_audio",
                         "input_audio" to J.obj("data" to Base64.encodeToString(it.bytes, Base64.NO_WRAP), "format" to "wav")
+                    )
+                    is AiPart.Image -> J.obj(
+                        "type" to "image_url",
+                        "image_url" to J.obj("url" to "data:${it.mime};base64,${Base64.encodeToString(it.bytes, Base64.NO_WRAP)}")
                     )
                 }
             }

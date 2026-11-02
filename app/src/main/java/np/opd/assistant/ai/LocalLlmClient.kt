@@ -112,6 +112,7 @@ class LocalLlmClient(
                 when (p) {
                     is AiPart.Text -> p.text
                     is AiPart.Wav -> "[audio not supported by the local text model]"
+                    is AiPart.Image -> "[image not supported by the local text model]"
                 }
             }
             return buildString {

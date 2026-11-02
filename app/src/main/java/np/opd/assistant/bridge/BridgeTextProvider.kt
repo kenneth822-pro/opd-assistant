@@ -7,6 +7,7 @@ import np.opd.assistant.data.local.entities.DischargeKind
 import np.opd.assistant.data.local.entities.EncounterType
 import np.opd.assistant.data.local.entities.PatientStatus
 import np.opd.engine.DischargeFormat
+import np.opd.engine.LabCatalogue
 import np.opd.engine.WardCensus
 import np.opd.engine.WardHandover
 import java.text.SimpleDateFormat
@@ -18,6 +19,7 @@ enum class BridgeDoc(val label: String, val key: String) {
     ER_DISCHARGE("ER Discharge Note", "er_discharge"),
     IP_DISCHARGE("Inpatient Discharge Summary", "ip_discharge"),
     OP_NOTE("Operation Note & Cardex", "op_note"),
+    LAB_TRENDS("Cumulative Lab Trends", "lab_trends"),
     SBAR("Ward SBAR Handover", "sbar")
 }
 
@@ -42,6 +44,8 @@ class BridgeTextProvider(private val repository: WardRepository) {
 
         return when (doc) {
             BridgeDoc.SBAR -> sbarFor(patientId)
+            BridgeDoc.LAB_TRENDS -> labTrends(patientId)
+            BridgeDoc.OP_NOTE -> latestOpNoteText(patientId) ?: opNoteAndCardex(patient, enc, cardex)
             BridgeDoc.ER_DISCHARGE, BridgeDoc.IP_DISCHARGE -> {
                 val kind = if (doc == BridgeDoc.ER_DISCHARGE || enc?.encounterType == EncounterType.ER) DischargeFormat.Kind.ER else DischargeFormat.Kind.INPATIENT
                 val input = DischargeFormat.DischargeInput(
@@ -60,20 +64,59 @@ class BridgeTextProvider(private val repository: WardRepository) {
                 )
                 DischargeFormat.plainText(input)
             }
-            BridgeDoc.OP_NOTE -> {
-                val sb = StringBuilder()
-                sb.appendLine("OPERATION NOTE & ACTIVE CARDEX (PROTOTYPE - UNVERIFIED)")
-                sb.appendLine("Patient: ${patient.name}  ${patient.age ?: "?"} y  ${patient.gender}")
-                sb.appendLine("Ward: ${patient.currentWard.name.replace('_', ' ')} Bed ${patient.bedNumber}")
-                sb.appendLine("Encounter: ${enc?.encounterType ?: "-"}  Consultant: ${enc?.consultantName ?: "-"}")
-                sb.appendLine()
-                sb.appendLine("ACTIVE CARDEX:")
-                if (cardex.isEmpty()) sb.appendLine("  (none)") else cardex.forEachIndexed { i, c ->
-                    sb.appendLine("  ${i + 1}. ${c.brandStated} ${c.doseCount?.let(::count) ?: ""} ${c.route.name} ${c.frequency}".trimEnd())
-                }
-                sb.toString()
-            }
         }
+    }
+
+    /** The latest saved operative note text, if any. */
+    suspend fun latestOpNoteText(patientId: String): String? =
+        repository.opNoteDao.getNotesForPatient(patientId).first().firstOrNull()?.fullText
+
+    /** Operation note + cardex fallback when no structured operative note has been saved yet. */
+    private fun opNoteAndCardex(patient: np.opd.assistant.data.local.entities.PatientEntity, enc: np.opd.assistant.data.local.entities.EncounterEntity?, cardex: List<np.opd.assistant.data.local.entities.CardexItemEntity>): String {
+        val sb = StringBuilder()
+        sb.appendLine("OPERATION NOTE & ACTIVE CARDEX (PROTOTYPE - UNVERIFIED)")
+        sb.appendLine("Patient: ${patient.name}  ${patient.age ?: "?"} y  ${patient.gender}")
+        sb.appendLine("Ward: ${patient.currentWard.name.replace('_', ' ')} Bed ${patient.bedNumber}")
+        sb.appendLine("Encounter: ${enc?.encounterType ?: "-"}  Consultant: ${enc?.consultantName ?: "-"}")
+        sb.appendLine()
+        sb.appendLine("ACTIVE CARDEX:")
+        if (cardex.isEmpty()) sb.appendLine("  (none)") else cardex.forEachIndexed { i, c ->
+            sb.appendLine("  ${i + 1}. ${c.brandStated} ${c.doseCount?.let(::count) ?: ""} ${c.route.name} ${c.frequency}".trimEnd())
+        }
+        return sb.toString()
+    }
+
+    /** A plain-text cumulative lab trend table (one row per test, one column per time). */
+    suspend fun labTrends(patientId: String): String {
+        val rows = repository.labDao.getLabFlowsheet(patientId).first()
+        if (rows.isEmpty()) return "CUMULATIVE LAB TRENDS\n(none recorded)"
+        val times = rows.map { it.timestamp }.distinct().sorted()
+        val byTest = rows.groupBy { it.testCode }
+        val header = buildString {
+            append("Test".padEnd(22))
+            times.forEach { append(fmt.format(Date(it)).padEnd(18)) }
+        }
+        val sb = StringBuilder("CUMULATIVE LAB TRENDS (PROTOTYPE - UNVERIFIED)\n")
+        sb.appendLine(header)
+        sb.appendLine("-".repeat(header.length))
+        LabCatalogue.definitions.forEach { d ->
+            val cells = byTest[d.code] ?: return@forEach
+            val name = d.displayName.take(20)
+            val line = StringBuilder(name.padEnd(22))
+            times.forEach { t ->
+                val v = cells.firstOrNull { it.timestamp == t }
+                val cell = when {
+                    v == null -> "-"
+                    v.isPanic -> "${count(v.numericValue)}!"
+                    v.abnormalDirection == "HIGH" -> "${count(v.numericValue)}^"
+                    v.abnormalDirection == "LOW" -> "${count(v.numericValue)}v"
+                    else -> count(v.numericValue)
+                }
+                line.append(cell.padEnd(18))
+            }
+            sb.appendLine(line.toString())
+        }
+        return sb.toString()
     }
 
     private suspend fun sbarFor(patientId: String): String {

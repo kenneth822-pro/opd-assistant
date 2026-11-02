@@ -137,8 +137,21 @@ class LocalPcBridgeService : Service() {
             "/api/verify" -> {
                 writeJson(out, if (params["pin"] == pin) """{"ok":true}""" else """{"ok":false}""")
             }
+            else -> {
+                // /api/patient/{id}/labs and /api/patient/{id}/opnotes
+                val m = Regex("^/api/patient/([^/]+)/(labs|opnotes)$").find(uri)
+                if (m != null) {
+                    if (!authorized(params)) { writeJson(out, """{"error":"auth"}"""); return }
+                    val pid = m.groupValues[1]
+                    val text = runBlocking {
+                        if (m.groupValues[2] == "labs") provider.labTrends(pid) else (provider.latestOpNoteText(pid) ?: "No operative note recorded.")
+                    }
+                    writeJson(out, """{"text":${json(text)}}""")
+                } else {
+                    writeRaw(out, "text/plain", "Not found".toByteArray())
+                }
+            }
             "/favicon.ico" -> writeRaw(out, "image/x-icon", ByteArray(0))
-            else -> writeRaw(out, "text/plain", "Not found".toByteArray())
         }
     }
 
@@ -287,6 +300,8 @@ class LocalPcBridgeService : Service() {
    <button class="ghost" onclick="doc('er_discharge')">📋 Copy ER Discharge Note</button>
    <button class="ghost" onclick="doc('op_note')">📋 Copy Operation Note &amp; Cardex</button>
    <button class="ghost" onclick="doc('sbar')">📋 Copy Ward SBAR Handover</button>
+   <button class="ghost" onclick="doc('lab_trends')">📋 Copy Cumulative Lab Trends</button>
+   <button class="ghost" onclick="opnote()">📋 Copy Latest Operation Note</button>
   </div>
  </div>
  <div class="card"><label>Preview</label><pre id="preview">Unlock, choose a patient and a document.</pre>
@@ -309,6 +324,12 @@ async function doc(kind){const pid=q('patient').value;if(!pid){q('preview').text
 }
 function manualCopy(t){const f=q('fallback');f.style.display='block';f.value=t;f.focus();f.select();
  try{document.execCommand('copy')}catch(e){};}
+async function opnote(){const pid=q('patient').value;if(!pid){q('preview').textContent='No patient selected.';return}
+ q('preview').textContent='Loading…';
+ const r=await fetch('/api/patient/'+encodeURIComponent(pid)+'/opnotes?pin='+encodeURIComponent(PIN));
+ const j=await r.json();
+ if(j.text!==undefined){q('preview').textContent=j.text}
+}
 async function copyPreview(){const t=q('preview').textContent;
  // Clipboard API requires a secure context (HTTPS/localhost); over a raw LAN IP it is blocked,
  // so fall back to a visible, pre-selected textarea for manual Ctrl+C.

@@ -944,4 +944,97 @@ class EngineTest {
         assertEquals(0, News2.scoreTemperatureC(37.0))
         assertEquals(2, News2.scoreTemperatureC(39.5))
     }
+
+    /* ---------------- Lab catalogue ---------------- */
+
+    @Test
+    fun labCatalogueEvaluatesNormalAndAbnormal() {
+        val hbNormal = LabCatalogue.evaluate("CBC_HB", 14.0)!!
+        assertEquals(LabCatalogue.Direction.NORMAL, hbNormal.direction)
+        assertFalse(hbNormal.isAbnormal)
+        assertFalse(hbNormal.isPanic)
+
+        val hbLow = LabCatalogue.evaluate("CBC_HB", 10.5)!!
+        assertEquals(LabCatalogue.Direction.LOW, hbLow.direction)
+        assertTrue(hbLow.isAbnormal)
+        assertFalse(hbLow.isPanic)
+    }
+
+    @Test
+    fun labCatalogueFlagsPanicThresholds() {
+        assertTrue(LabCatalogue.evaluate("CBC_HB", 6.5)!!.isPanic)      // < 7.0
+        assertTrue(LabCatalogue.evaluate("LYTE_K", 6.5)!!.isPanic)      // > 6.0
+        assertTrue(LabCatalogue.evaluate("LYTE_K", 2.5)!!.isPanic)      // < 2.8
+        assertTrue(LabCatalogue.evaluate("RFT_CR", 4.0)!!.isPanic)      // > 3.0
+        assertTrue(LabCatalogue.evaluate("CBC_PLT", 30000.0)!!.isPanic) // < 50000
+        assertFalse(LabCatalogue.evaluate("CBC_PLT", 200000.0)!!.isPanic)
+    }
+
+    @Test
+    fun labCatalogueMatchesByAliasAndReport() {
+        assertEquals("CBC_HB", LabCatalogue.findByText("Hb 8.4 g/dL")?.code)
+        assertEquals("RFT_CR", LabCatalogue.findByText("S. Creatinine 2.1")?.code)
+        assertEquals("LYTE_K", LabCatalogue.findByText("K+ 3.2")?.code)
+        assertEquals("GLUC_RBS", LabCatalogue.findByText("Random blood sugar 210")?.code)
+    }
+
+    /* ---------------- Operative note ---------------- */
+
+    @Test
+    fun opNoteCleanTextHasNoMarkdownOrTabs() {
+        val t = OpNoteFormat.cleanText(sampleOpNote())
+        assertTrue(t.contains("OPERATIVE NOTE"))
+        assertTrue(t.contains("Laparotomy"))
+        assertFalse(t.contains("##"))
+        assertFalse(t.contains("\t"))
+        assertTrue(t.contains("Immediate", ignoreCase = true) || t.contains("POST-OP"))
+    }
+
+    @Test
+    fun opNoteMarkdownUsesHeadings() {
+        val md = OpNoteFormat.markdown(sampleOpNote())
+        assertTrue(md.contains("# Operative Note"))
+        assertTrue(md.contains("## Operative findings"))
+    }
+
+    @Test
+    fun opNoteExtractsOrdersAndRunsSafety() {
+        val note = sampleOpNote().copy(
+            immediatePostOpOrders = listOf("IV Ceftriaxone 1g BD", "Tab Pantop 40mg OD", "IV RL 100 ml/hr")
+        )
+        val candidates = OpNoteFormat.extractCandidateOrders(note.immediatePostOpOrders, CaseState(demographics = Demographics(age = 45, gender = Gender.MALE)), c)
+        assertEquals(3, candidates.size)
+        // Ceftriaxone is not in the adult OPD formulary -> caution, not silent.
+        val ceftriaxone = candidates.first { it.stated.contains("Ceftriaxone") }
+        assertTrue(ceftriaxone.findings.isNotEmpty())
+        // Pantoprazole is in the formulary -> matched.
+        val pantop = candidates.first { it.stated.contains("Pantop") }
+        assertNotNull(pantop.drugId)
+        // IVF line is recognised but not drug-matched.
+        val ivf = candidates.first { it.stated.contains("RL") }
+        assertNull(ivf.drugId)
+    }
+
+    @Test
+    fun opNoteOrderBlockedByAllergy() {
+        // Give a penicillin-class allergy; amoxicillin should be blocked.
+        val ctx = CaseState(
+            demographics = Demographics(age = 40, gender = Gender.MALE),
+            allergies = setOf("ALLERGY_PENICILLIN_CLASS")
+        )
+        val candidates = OpNoteFormat.extractCandidateOrders(listOf("Cap Amoxicillin 500mg TDS"), ctx, c)
+        assertTrue(candidates.first().blocked)
+    }
+
+    private fun sampleOpNote() = OpNoteFormat.Data(
+        procedureTitle = "Laparotomy",
+        preOpDiagnosis = "Acute abdomen",
+        postOpDiagnosis = "Perforated appendix",
+        surgeonName = "Dr Karki",
+        incision = "Midline",
+        operativeFindings = "Perforated appendix with minimal contamination",
+        procedureSteps = "Incision, exploration, appendectomy, lavage, closure",
+        bloodLossMl = 100,
+        drains = "Pelvic drain"
+    )
 }

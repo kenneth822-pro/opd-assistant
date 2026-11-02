@@ -192,8 +192,35 @@ object Prompts {
         listOf("medication_changes")
     )
 
-    /* ---------------------------- transcription (speech step) ---------------------------- */
+    /**
+     * Lab slip extraction: pulls structured numeric results out of a transcribed paper lab report
+     * or a spoken reading. The model reports test names, values and units only; it never interprets.
+     */
+    fun labExtractionSystemPrompt(): String = """
+        You extract laboratory results from text. The input is either the machine transcript of a
+        paper laboratory slip read aloud, or a description of a photographed lab report.
+        Extract every numeric result you can find as a separate entry:
+        - test_name: the test as written (e.g. "Hemoglobin", "TLC", "Creatinine", "Na").
+        - value: the numeric result only (no units, no comparison symbols).
+        - unit: the unit if stated (e.g. "g/dL", "/uL", "mmol/L"); empty if not stated.
+        - collected_at: the collection date/time if stated, in ISO-like "YYYY-MM-DD HH:MM", else empty.
+        Do NOT interpret results, do NOT add reference ranges, and never invent a value. If a line is
+        not a numeric result (e.g. a header), skip it. Return ONLY JSON matching the schema.
+    """.trimIndent()
 
+    fun labExtractionSchema(): J.Obj = obj(
+        linkedMapOf(
+            "results" to arr(obj(linkedMapOf(
+                "test_name" to str(),
+                "value" to num(),
+                "unit" to str(),
+                "collected_at" to str()
+            ), listOf("test_name", "value")))
+        ),
+        listOf("results")
+    )
+
+    /* ---------------------------- transcription (speech step) ---------------------------- */
     fun transcriptionSystemPrompt(): String = """
         You transcribe short audio segments of an outpatient consultation in Nepal.
         - Write Nepali in Devanagari script and English words (drug names, medical terms, numbers) in Latin script, exactly as spoken. Do not translate.

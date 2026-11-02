@@ -137,6 +137,7 @@ class LocalPcBridgeService : Service() {
             "/api/verify" -> {
                 writeJson(out, if (params["pin"] == pin) """{"ok":true}""" else """{"ok":false}""")
             }
+            "/favicon.ico" -> writeRaw(out, "image/x-icon", ByteArray(0))
             else -> {
                 // /api/patient/{id}/labs and /api/patient/{id}/opnotes
                 val m = Regex("^/api/patient/([^/]+)/(labs|opnotes)$").find(uri)
@@ -151,7 +152,6 @@ class LocalPcBridgeService : Service() {
                     writeRaw(out, "text/plain", "Not found".toByteArray())
                 }
             }
-            "/favicon.ico" -> writeRaw(out, "image/x-icon", ByteArray(0))
         }
     }
 

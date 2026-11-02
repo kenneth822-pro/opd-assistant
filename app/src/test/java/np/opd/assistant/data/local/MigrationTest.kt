@@ -23,6 +23,39 @@ class MigrationTest {
         assertEquals(2, Migrations.MIGRATION_1_2.endVersion)
         assertEquals(2, Migrations.MIGRATION_2_3.startVersion)
         assertEquals(3, Migrations.MIGRATION_2_3.endVersion)
+        assertEquals(3, Migrations.MIGRATION_3_4.startVersion)
+        assertEquals(4, Migrations.MIGRATION_3_4.endVersion)
+    }
+
+    @Test
+    fun v3to4CreatesLabAndOpNoteTables() {
+        val joined = Migrations.statements3_4().joinToString("\n")
+        assertTrue(joined.contains("CREATE TABLE IF NOT EXISTS `lab_results`"))
+        assertTrue(joined.contains("CREATE TABLE IF NOT EXISTS `operative_notes`"))
+        // lab_results columns
+        listOf("testCode", "displayName", "category", "numericValue", "isAbnormal", "abnormalDirection", "isPanic", "updatedAt", "isSynced", "deletedAt").forEach {
+            assertTrue("lab_results missing $it", joined.contains("`$it`"))
+        }
+        // operative_notes columns
+        listOf("dataJson", "fullText", "createdAt", "updatedAt", "isSynced", "deletedAt").forEach {
+            assertTrue("operative_notes missing $it", joined.contains("`$it`"))
+        }
+        // indices (the spec asks for patient_id and updated_at indices)
+        assertTrue(joined.contains("index_lab_results_patientId"))
+        assertTrue(joined.contains("index_lab_results_updatedAt"))
+        assertTrue(joined.contains("index_operative_notes_patientId"))
+        assertTrue(joined.contains("index_operative_notes_updatedAt"))
+    }
+
+    @Test
+    fun v3to4StatementsAreWellFormed() {
+        Migrations.statements3_4().forEach { stmt ->
+            val trimmed = stmt.trim()
+            assertTrue(trimmed.isNotEmpty())
+            val upper = trimmed.uppercase()
+            assertTrue(upper.startsWith("CREATE TABLE") || upper.startsWith("CREATE INDEX"))
+            assertEquals(count(trimmed, '('), count(trimmed, ')'))
+        }
     }
 
     @Test
@@ -67,14 +100,14 @@ class MigrationTest {
 
     @Test
     fun migrationsAreNonDestructive() {
-        val all = (Migrations.statements1_2() + migration23).joinToString("\n").uppercase()
+        val all = (Migrations.statements1_2() + migration23 + Migrations.statements3_4()).joinToString("\n").uppercase()
         assertFalse("migrations must never DROP tables", all.contains("DROP TABLE"))
         assertFalse("migrations must never DELETE rows", all.contains("DELETE FROM"))
     }
 
     @Test
     fun everyStatementLooksWellFormed() {
-        (Migrations.statements1_2() + migration23).forEach { stmt ->
+        (Migrations.statements1_2() + migration23 + Migrations.statements3_4()).forEach { stmt ->
             val trimmed = stmt.trim()
             assertTrue("empty statement", trimmed.isNotEmpty())
             val upper = trimmed.uppercase()

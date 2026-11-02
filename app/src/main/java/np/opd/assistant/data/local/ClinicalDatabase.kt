@@ -10,7 +10,9 @@ import np.opd.assistant.data.local.dao.ConsultDao
 import np.opd.assistant.data.local.dao.DischargeDao
 import np.opd.assistant.data.local.dao.EncounterDao
 import np.opd.assistant.data.local.dao.FluidIoDao
+import np.opd.assistant.data.local.dao.LabDao
 import np.opd.assistant.data.local.dao.MediaDao
+import np.opd.assistant.data.local.dao.OpNoteDao
 import np.opd.assistant.data.local.dao.OtScheduleDao
 import np.opd.assistant.data.local.dao.PatientDao
 import np.opd.assistant.data.local.dao.TaskDao
@@ -20,7 +22,9 @@ import np.opd.assistant.data.local.entities.ConsultEntity
 import np.opd.assistant.data.local.entities.DischargeEntity
 import np.opd.assistant.data.local.entities.EncounterEntity
 import np.opd.assistant.data.local.entities.FluidIoEntity
+import np.opd.assistant.data.local.entities.LabResultEntity
 import np.opd.assistant.data.local.entities.MediaEntity
+import np.opd.assistant.data.local.entities.OperativeNoteEntity
 import np.opd.assistant.data.local.entities.OtScheduleEntity
 import np.opd.assistant.data.local.entities.PatientEntity
 import np.opd.assistant.data.local.entities.TaskEntity
@@ -42,9 +46,11 @@ import np.opd.assistant.data.local.entities.VitalsLogEntity
         DischargeEntity::class,
         FluidIoEntity::class,
         VitalsLogEntity::class,
-        OtScheduleEntity::class
+        OtScheduleEntity::class,
+        LabResultEntity::class,
+        OperativeNoteEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -60,6 +66,8 @@ abstract class ClinicalDatabase : RoomDatabase() {
     abstract fun fluidIoDao(): FluidIoDao
     abstract fun vitalsLogDao(): VitalsLogDao
     abstract fun otScheduleDao(): OtScheduleDao
+    abstract fun labDao(): LabDao
+    abstract fun opNoteDao(): OpNoteDao
 
     companion object {
         const val DB_NAME = "clinical.db"

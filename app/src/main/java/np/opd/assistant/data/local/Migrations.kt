@@ -163,5 +163,59 @@ object Migrations {
         }
     }
 
-    val ALL = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    /** v3 -> v4: cumulative lab results and surgical operative notes (phase 7). */
+    fun statements3_4(): List<String> = listOf(
+        """
+        CREATE TABLE IF NOT EXISTS `lab_results` (
+            `id` TEXT NOT NULL,
+            `patientId` TEXT NOT NULL,
+            `encounterId` TEXT NOT NULL,
+            `timestamp` INTEGER NOT NULL,
+            `testCode` TEXT NOT NULL,
+            `displayName` TEXT NOT NULL,
+            `category` TEXT NOT NULL,
+            `numericValue` REAL NOT NULL,
+            `unit` TEXT NOT NULL,
+            `isAbnormal` INTEGER NOT NULL,
+            `abnormalDirection` TEXT NOT NULL,
+            `isPanic` INTEGER NOT NULL,
+            `updatedAt` INTEGER NOT NULL,
+            `isSynced` INTEGER NOT NULL,
+            `deletedAt` INTEGER,
+            PRIMARY KEY(`id`),
+            FOREIGN KEY(`patientId`) REFERENCES `patients`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+        )
+        """.trimIndent(),
+        "CREATE INDEX IF NOT EXISTS `index_lab_results_patientId` ON `lab_results` (`patientId`)",
+        "CREATE INDEX IF NOT EXISTS `index_lab_results_encounterId` ON `lab_results` (`encounterId`)",
+        "CREATE INDEX IF NOT EXISTS `index_lab_results_timestamp` ON `lab_results` (`timestamp`)",
+        "CREATE INDEX IF NOT EXISTS `index_lab_results_updatedAt` ON `lab_results` (`updatedAt`)",
+        """
+        CREATE TABLE IF NOT EXISTS `operative_notes` (
+            `id` TEXT NOT NULL,
+            `patientId` TEXT NOT NULL,
+            `encounterId` TEXT NOT NULL,
+            `createdAt` INTEGER NOT NULL,
+            `dataJson` TEXT NOT NULL,
+            `fullText` TEXT NOT NULL,
+            `updatedAt` INTEGER NOT NULL,
+            `isSynced` INTEGER NOT NULL,
+            `deletedAt` INTEGER,
+            PRIMARY KEY(`id`),
+            FOREIGN KEY(`encounterId`) REFERENCES `encounters`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+        )
+        """.trimIndent(),
+        "CREATE INDEX IF NOT EXISTS `index_operative_notes_encounterId` ON `operative_notes` (`encounterId`)",
+        "CREATE INDEX IF NOT EXISTS `index_operative_notes_patientId` ON `operative_notes` (`patientId`)",
+        "CREATE INDEX IF NOT EXISTS `index_operative_notes_createdAt` ON `operative_notes` (`createdAt`)",
+        "CREATE INDEX IF NOT EXISTS `index_operative_notes_updatedAt` ON `operative_notes` (`updatedAt`)"
+    )
+
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            statements3_4().forEach { db.execSQL(it) }
+        }
+    }
+
+    val ALL = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 }

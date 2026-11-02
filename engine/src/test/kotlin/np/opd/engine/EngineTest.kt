@@ -985,9 +985,9 @@ class EngineTest {
         val t = OpNoteFormat.cleanText(sampleOpNote())
         assertTrue(t.contains("OPERATIVE NOTE"))
         assertTrue(t.contains("Laparotomy"))
+        assertTrue(t.contains("Post-op Dx"))
         assertFalse(t.contains("##"))
         assertFalse(t.contains("\t"))
-        assertTrue(t.contains("Immediate", ignoreCase = true) || t.contains("POST-OP"))
     }
 
     @Test

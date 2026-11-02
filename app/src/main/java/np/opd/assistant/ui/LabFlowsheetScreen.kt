@@ -179,7 +179,7 @@ private fun ValueCell(cell: LabResultEntity?) {
         )
     }
     val (bg, fg) = when {
-        cell == null -> Color.Transparent to Palette.freeFg
+        cell == null -> Color.Transparent to WardPalette.freeFg
         cell.isPanic -> Palette.emergencyBg to Palette.emergencyFg
         cell.abnormalDirection == "HIGH" -> Palette.urgentBg to Palette.urgentFg
         cell.abnormalDirection == "LOW" -> Palette.infoBg to Palette.infoFg

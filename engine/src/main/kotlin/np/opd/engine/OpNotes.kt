@@ -214,4 +214,47 @@ object OpNoteFormat {
     }
 
     private fun blank(s: String): String = if (s.isBlank()) "—" else s
+
+    /* ------------------------------- serialization ------------------------------- */
+
+    fun toJson(d: Data): String = J.obj(
+        "procedureTitle" to d.procedureTitle,
+        "preOpDiagnosis" to d.preOpDiagnosis,
+        "postOpDiagnosis" to d.postOpDiagnosis,
+        "surgeonName" to d.surgeonName,
+        "assistantName" to d.assistantName,
+        "anesthetistName" to d.anesthetistName,
+        "anesthesiaType" to d.anesthesiaType,
+        "incision" to d.incision,
+        "operativeFindings" to d.operativeFindings,
+        "procedureSteps" to d.procedureSteps,
+        "bloodLossMl" to d.bloodLossMl,
+        "drains" to d.drains,
+        "specimenSent" to d.specimenSent,
+        "spongeCountCorrect" to d.spongeCountCorrect,
+        "immediatePostOpOrders" to d.immediatePostOpOrders
+    ).toJson()
+
+    fun fromJson(json: String): Data? = try {
+        val o = J.parse(json) as? J.Obj ?: return null
+        Data(
+            procedureTitle = o.strOr("procedureTitle", ""),
+            preOpDiagnosis = o.strOr("preOpDiagnosis", ""),
+            postOpDiagnosis = o.strOr("postOpDiagnosis", ""),
+            surgeonName = o.strOr("surgeonName", ""),
+            assistantName = o.str("assistantName")?.takeIf { it.isNotBlank() },
+            anesthetistName = o.str("anesthetistName")?.takeIf { it.isNotBlank() },
+            anesthesiaType = o.strOr("anesthesiaType", "GA"),
+            incision = o.strOr("incision", ""),
+            operativeFindings = o.strOr("operativeFindings", ""),
+            procedureSteps = o.strOr("procedureSteps", ""),
+            bloodLossMl = o.int("bloodLossMl"),
+            drains = o.str("drains")?.takeIf { it.isNotBlank() },
+            specimenSent = o.str("specimenSent")?.takeIf { it.isNotBlank() },
+            spongeCountCorrect = o.bool("spongeCountCorrect") ?: true,
+            immediatePostOpOrders = o.strs("immediatePostOpOrders")
+        )
+    } catch (e: Exception) {
+        null
+    }
 }

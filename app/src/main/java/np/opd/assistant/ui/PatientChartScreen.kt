@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -129,6 +130,7 @@ fun PatientChartScreen(
                     SectionCard("OT & Pre-Op") { Muted("No open admission for this patient.") }
                 } else {
                     OtSlateTab(wardVm = wardVm, clinicalVm = clinicalVm, patientId = patientId, encounterId = activeEncounter.id)
+                    OpNotesSection(wardVm = wardVm, patientId = patientId, encounterId = activeEncounter.id)
                 }
             }
 
@@ -426,6 +428,52 @@ private fun ChecklistRow(label: String, checked: Boolean, onChange: (Boolean) ->
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = { onChange(it) })
         Text(label, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun OpNotesSection(wardVm: WardViewModel, patientId: String, encounterId: String) {
+    val notes by remember(encounterId) { wardVm.repository.opNoteDao.observeForEncounter(encounterId) }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val opNoteVm: np.opd.assistant.ward.OpNoteViewModel = viewModel()
+    var creating by remember { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(patientId, encounterId) { opNoteVm.load(patientId, encounterId) }
+
+    SectionCard("Operative Notes") {
+        Muted("Surgical documentation: build the note, copy clean text for the desktop EMR, and bridge the immediate post-op orders into the cardex.")
+        Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("+ New operative note") }
+        if (notes.isEmpty()) {
+            Muted("No operative notes recorded yet.")
+        } else {
+            notes.forEach { n ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        n.fullText.lineSequence().firstOrNull { it.trim().startsWith("Procedure") }?.trim() ?: "Operative note",
+                        fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                    )
+                    Muted(android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", n.createdAt).toString())
+                    OutlinedButton(onClick = { creating = true }) { Text("Open builder") }
+                }
+            }
+        }
+    }
+
+    if (creating) {
+        AlertDialog(
+            onDismissRequest = { creating = false },
+            title = { Text("Operative Note Builder") },
+            text = {
+                androidx.compose.foundation.layout.Column(
+                    Modifier
+                        .height(460.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    OpNoteScreen(opNoteVm)
+                }
+            },
+            confirmButton = { TextButton(onClick = { creating = false }) { Text("Close") } }
+        )
     }
 }
 
